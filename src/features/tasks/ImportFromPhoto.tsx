@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { ChangeEvent } from 'react'
 import Modal from '../../components/Modal'
 import { addTask, useDb } from '../../lib/db'
 import { dayKeyToIso, isoToSeoulInput, seoulInputToIso, todayKey } from '../../lib/date'
@@ -25,6 +26,7 @@ export default function ImportFromPhoto({ open, onClose }: Props) {
   const db = useDb()
   const children = db.members.filter((m) => m.role === 'child')
   const fileRef = useRef<HTMLInputElement>(null)
+  const cameraRef = useRef<HTMLInputElement>(null)
 
   const [step, setStep] = useState<Step>('pick')
   const [progress, setProgress] = useState<OcrProgress>({ label: '', ratio: 0 })
@@ -73,6 +75,12 @@ export default function ImportFromPhoto({ open, onClose }: Props) {
     }
   }
 
+  function onPick(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) void handleFile(file)
+    e.target.value = ''
+  }
+
   function save() {
     for (const line of lines) {
       addTask({
@@ -113,29 +121,42 @@ export default function ImportFromPhoto({ open, onClose }: Props) {
             줍니다. <b>사진은 저장하지 않고</b> 글자만 가져온 뒤 바로 버립니다.
           </p>
 
+          {/* 학원 숙제는 대부분 카톡 등으로 받은 사진이라 앨범이 기본입니다.
+              capture 를 붙이면 폰에서 카메라만 열려 앨범을 고를 수 없습니다. */}
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
             className="card flex w-full flex-col items-center gap-2 py-10 hover:bg-cream"
           >
             <span className="text-5xl" aria-hidden="true">
-              📷
+              🖼️
             </span>
-            <span className="font-bold">사진 고르기</span>
-            <span className="text-sm text-muted">찍어서 바로 올려도 돼요</span>
+            <span className="font-bold">앨범에서 사진 고르기</span>
+            <span className="text-sm text-muted">학원에서 받은 숙제 사진</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => cameraRef.current?.click()}
+            className="btn w-full"
+          >
+            📷 지금 찍기
           </button>
 
           <input
             ref={fileRef}
             type="file"
             accept="image/*"
+            className="hidden"
+            onChange={onPick}
+          />
+          <input
+            ref={cameraRef}
+            type="file"
+            accept="image/*"
             capture="environment"
             className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              if (file) void handleFile(file)
-              e.target.value = ''
-            }}
+            onChange={onPick}
           />
 
           <button
