@@ -1,0 +1,33 @@
+# package-lock.json 을 GitHub 쪽에서 만들어 커밋합니다.
+#
+# 회사망 프록시가 큰 파일 업로드를 막아서 lockfile(140KB) 을 올릴 수 없었습니다.
+# 그래서 소스만 올리고, 이 워크플로를 Actions 탭에서 한 번 돌려 lockfile 을 만듭니다.
+# package.json 의 의존성을 바꿨는데 lockfile 을 푸시할 수 없을 때도 다시 쓰면 됩니다.
+name: Generate package-lock.json
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm install --package-lock-only --ignore-scripts
+
+      - name: Commit lockfile
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git diff --cached --quiet && echo "변경 없음" && exit 0
+          git commit -m "package-lock.json 생성 (Actions)"
+          git push
