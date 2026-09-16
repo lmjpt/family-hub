@@ -1,0 +1,30 @@
+node_modules
+dist
+dist-ssr
+*.local
+
+# 실제 가족 데이터가 들어갈 수 있는 파일은 절대 커밋하지 않는다.
+.env
+.env.local
+*.backup.json
+
+# 배포용으로 만든 압축 파일
+*.zip
+.netlify
+
+# 이 PC(사내망) 전용 npm 설정. 공개 저장소에 올리지 않습니다.
+# 집에서 받아서 쓸 때는 필요 없는 설정입니다.
+.npmrc
+
+# OCR 인식 데이터. 브라우저가 CDN 에서 받아 캐시하므로 저장소에 둘 필요가 없습니다.
+# (Node 로 OCR 을 시험해 보면 이 파일들이 여기에 떨어집니다)
+*.traineddata
+
+# 이 PC 에서만 쓰는 로컬 설정
+.claude/settings.local.json
+
+# 에디터
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store

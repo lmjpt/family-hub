@@ -1,0 +1,153 @@
+@import 'tailwindcss';
+
+/*
+  아이도 쓰는 앱이라 색은 부드럽게, 글자와 버튼은 크게 잡았습니다.
+  특히 벌점 계열 색(minus)은 일부러 빨강을 피했습니다 — 화면이 혼나는 느낌이
+  들면 아이가 앱을 안 엽니다.
+*/
+@theme {
+  --color-cream: #fdf6ec;
+  --color-paper: #ffffff;
+  --color-ink: #3a332c;
+  --color-muted: #8d8177;
+  --color-line: #efe5d7;
+  --color-brand: #e8795a;
+  --color-brand-soft: #fbe6de;
+  --color-praise: #c98f2c;
+  --color-praise-soft: #faf0d8;
+  --color-minus: #6f7d8c;
+  --color-minus-soft: #eceff2;
+
+  --font-sans:
+    'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont,
+    'Apple SD Gothic Neo', 'Malgun Gothic', 'Segoe UI', sans-serif;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-cream);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button {
+    cursor: pointer;
+    font-family: inherit;
+    color: inherit;
+  }
+
+  input,
+  select,
+  textarea {
+    font-family: inherit;
+    font-size: 1rem;
+    color: inherit;
+  }
+
+  /* 모바일에서 버튼 더블탭 확대 방지 + 탭할 때 뜨는 회색 사각형 제거 */
+  button,
+  a {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /*
+    홈 화면에 추가해 앱처럼 열었을 때, 글자를 길게 눌러 선택되는 걸 막습니다.
+    입력란과 읽은 글자를 고치는 영역은 선택이 되어야 하므로 예외로 둡니다.
+  */
+  @media (display-mode: standalone) {
+    body {
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    input,
+    textarea {
+      -webkit-user-select: text;
+      user-select: text;
+    }
+  }
+}
+
+/*
+  반복해서 쓰는 몇 가지만 클래스로 빼 둡니다. 나머지는 유틸리티로 씁니다.
+  반드시 components 레이어 안에 둬야 합니다. 레이어 밖에 두면 나중에 덧붙이는
+  유틸리티(px-3 같은 것)보다 우선순위가 높아져서 덮어쓸 수 없게 됩니다.
+*/
+@layer components {
+  .card {
+    background: var(--color-paper);
+    border: 1px solid var(--color-line);
+    border-radius: 1.25rem;
+  }
+
+  .field {
+    width: 100%;
+    border: 1px solid var(--color-line);
+    border-radius: 0.75rem;
+    background: var(--color-paper);
+    padding: 0.75rem 1rem;
+    outline: none;
+  }
+
+  .field:focus {
+    border-color: var(--color-brand);
+  }
+
+  .field:disabled {
+    background: var(--color-cream);
+    color: var(--color-muted);
+  }
+
+  .label {
+    display: block;
+    margin-bottom: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-muted);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+    transition:
+      filter 0.15s ease,
+      background-color 0.15s ease;
+  }
+
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .btn-primary {
+    background: var(--color-brand);
+    color: #fff;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    filter: brightness(0.94);
+  }
+
+  .btn-ghost {
+    background: var(--color-paper);
+    border-color: var(--color-line);
+    color: var(--color-ink);
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--color-cream);
+  }
+}
