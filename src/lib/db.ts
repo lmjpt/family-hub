@@ -40,7 +40,17 @@ function read(): DbShape {
   } catch {
     // 저장된 데이터가 깨졌으면 조용히 초기 데이터로 시작합니다.
   }
-  return seedData()
+
+  // 처음 켰을 때. 예시 데이터를 만들고 '바로' 저장해야 합니다.
+  // 저장을 미루면 새로고침할 때마다 구성원 id 가 새로 만들어지고,
+  // 로그인 세션이 가리키던 사람이 사라져서 로그인 화면으로 튕깁니다.
+  const seeded = seedData()
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded))
+  } catch {
+    // 저장 공간이 없어도 이번 세션 동안은 그냥 쓰게 둡니다.
+  }
+  return seeded
 }
 
 let state: DbShape = read()
