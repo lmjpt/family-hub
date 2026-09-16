@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import Avatar from '../components/Avatar'
 import MemberForm from '../features/members/MemberForm'
 import { useSession } from '../features/auth'
+import { useFamilyAuth } from '../features/familyAuth'
 import {
   addReward,
   exportJson,
@@ -18,6 +19,7 @@ import type { Member } from '../types'
 export default function Settings() {
   const db = useDb()
   const { me, logout } = useSession()
+  const { signOut } = useFamilyAuth()
   const fileRef = useRef<HTMLInputElement>(null)
 
   const [editing, setEditing] = useState<Member | null>(null)
@@ -46,7 +48,7 @@ export default function Settings() {
     )
     if (!ok) return
     try {
-      importJson(await file.text())
+      await importJson(await file.text())
       window.alert('불러왔습니다.')
     } catch (err) {
       window.alert(err instanceof Error ? err.message : '불러오지 못했습니다.')
@@ -198,8 +200,8 @@ export default function Settings() {
         <section className="space-y-2">
           <h3 className="text-base font-bold">데이터 보관</h3>
           <p className="text-sm text-muted">
-            지금은 이 브라우저 안에만 저장됩니다. 방문 기록이나 사이트 데이터를 지우면
-            함께 사라지니, 가끔 백업 파일을 받아 두세요.
+            내용은 서버에 저장되고 가족 모두의 기기에서 함께 보입니다. 여기서 바꾸면
+            다른 사람 화면에도 바로 반영되니 조심해서 눌러 주세요.
           </p>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={download} className="btn btn-ghost">
@@ -227,9 +229,9 @@ export default function Settings() {
               type="button"
               onClick={() => {
                 const ok = window.confirm(
-                  '지금까지 쌓인 일정, 할일, 포인트가 모두 사라지고 처음 예시 상태로 돌아갑니다. 정말 되돌릴까요?',
+                  '지금까지 쌓인 일정, 할일, 포인트가 모두 사라지고 처음 예시 상태로 돌아갑니다. 가족 모두의 기기에서 사라집니다. 정말 되돌릴까요?',
                 )
-                if (ok) resetToSeed()
+                if (ok) void resetToSeed()
               }}
               className="btn btn-ghost text-muted"
             >
@@ -239,9 +241,29 @@ export default function Settings() {
         </section>
       )}
 
-      <button type="button" onClick={logout} className="btn btn-ghost w-full">
-        다른 사람으로 바꾸기
-      </button>
+      <div className="space-y-2">
+        <button type="button" onClick={logout} className="btn btn-ghost w-full">
+          다른 사람으로 바꾸기
+        </button>
+
+        {/*
+          가족 계정 로그아웃은 드물게 씁니다 (기기를 남에게 줄 때 등).
+          누르면 이 기기에서 다시 이메일·비밀번호를 넣어야 하므로
+          아이가 실수로 누르지 않도록 작게, 아래쪽에 둡니다.
+        */}
+        <button
+          type="button"
+          onClick={() => {
+            const ok = window.confirm(
+              '이 기기에서 가족 계정을 로그아웃합니다. 다시 쓰려면 이메일과 비밀번호를 넣어야 해요. 계속할까요?',
+            )
+            if (ok) void signOut()
+          }}
+          className="w-full py-2 text-xs text-muted underline underline-offset-4"
+        >
+          이 기기에서 가족 계정 로그아웃
+        </button>
+      </div>
 
       <MemberForm
         open={memberFormOpen}

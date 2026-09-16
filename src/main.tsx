@@ -4,6 +4,7 @@ import { HashRouter } from 'react-router-dom'
 import './index.css'
 import App from './App'
 import { SessionProvider } from './features/auth'
+import { FamilyAuthProvider } from './features/familyAuth'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -13,9 +14,11 @@ createRoot(document.getElementById('root')!).render(
       홈 화면에 추가해서 쓰면 주소창이 안 보이니 실사용에는 차이가 없습니다.
     */}
     <HashRouter>
-      <SessionProvider>
-        <App />
-      </SessionProvider>
+      <FamilyAuthProvider>
+        <SessionProvider>
+          <App />
+        </SessionProvider>
+      </FamilyAuthProvider>
     </HashRouter>
   </StrictMode>,
 )

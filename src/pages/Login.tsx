@@ -6,10 +6,15 @@ import type { Member } from '../types'
 
 export default function Login() {
   const db = useDb()
-  const { login } = useSession()
-  const [picked, setPicked] = useState<Member | null>(null)
+  const { login, pending, logout } = useSession()
+  const [chosen, setChosen] = useState<Member | null>(null)
   const [pin, setPin] = useState('')
   const [error, setError] = useState(false)
+
+  // 이 기기가 기억하고 있는 사람이 있으면 얼굴 고르기를 건너뛰고
+  // 바로 그 사람의 비밀번호 화면으로 갑니다.
+  const picked = chosen ?? pending
+  const setPicked = setChosen
 
   function choose(member: Member) {
     // PIN 이 없는 사람(주로 아이들)은 얼굴만 누르면 바로 들어갑니다.
@@ -68,12 +73,14 @@ export default function Login() {
           <button
             type="button"
             onClick={() => {
+              // 기억까지 지워야 얼굴 고르기 화면으로 돌아갑니다.
+              logout()
               setPicked(null)
               setPin('')
             }}
             className="py-5 text-sm font-semibold text-muted"
           >
-            뒤로
+            다른 사람
           </button>
           <button
             type="button"
