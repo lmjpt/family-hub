@@ -24,7 +24,7 @@ export interface OcrProgress {
 function toKorean(status: string): string {
   if (status.includes('loading tesseract')) return '준비하는 중'
   if (status.includes('initializing tesseract')) return '준비하는 중'
-  if (status.includes('traineddata')) return '한글 데이터를 받는 중 (처음 한 번만)'
+  if (status.includes('traineddata')) return '인식 데이터를 받는 중 (처음 한 번만)'
   if (status.includes('initializing api')) return '거의 다 됐어요'
   if (status.includes('recognizing')) return '사진에서 글자를 읽는 중'
   return '처리하는 중'
@@ -52,16 +52,25 @@ async function shrink(file: File): Promise<Blob> {
 }
 
 /**
+ * 어떤 글자를 기대하고 읽을지.
+ * 한글 데이터를 같이 켜면 영어 학원 숙제의 'P', 'Jw' 같은 짧은 영어 단어를
+ * 한글로 잘못 읽는 일이 잦습니다. 영어만 적힌 사진은 'eng' 로 읽는 게 낫습니다.
+ */
+export type OcrLanguage = 'kor+eng' | 'eng'
+
+/**
  * 사진에서 글자를 읽어 문자열로 돌려줍니다.
  * 다 끝나면 사진 데이터는 함수 밖으로 나가지 않고 그대로 버려집니다.
  */
 export async function readTextFromImage(
   file: File,
   onProgress: (p: OcrProgress) => void,
+  language: OcrLanguage = 'kor+eng',
 ): Promise<string> {
   const image = await shrink(file)
 
-  const worker = await createWorker(['kor', 'eng'], 1, {
+  const langs = language === 'eng' ? ['eng'] : ['kor', 'eng']
+  const worker = await createWorker(langs, 1, {
     logger: (m) => onProgress({ label: toKorean(m.status), ratio: m.progress }),
   })
 
@@ -93,4 +102,40 @@ export function toHomeworkLines(text: string): string[] {
     )
     // 한 글자짜리 줄은 대부분 인식 오류라 버립니다.
     .filter((line) => line.length >= 2)
+}
+
+/** 숙제 한 줄에 적힌 마감 월·일. 연도는 lib/date 의 monthDayToKey 가 정합니다. */
+export interface DueHint {
+  month: number
+  day: number
+}
+
+// 'By 9/15', '~9/15', '9/15까지', '(9월 15일)' — 슬래시나 '월' 이 있으면 날짜로 봅니다.
+const SLASH_DATE =
+  /(?:\b(?:by|due)\b|~|마감|제출)?\s*[([]?\s*(\d{1,2})\s*(?:\/|월)\s*(\d{1,2})\s*일?\s*[)\]]?\s*(?:까지|마감|제출)?/i
+// 'by 9.15', '9.15까지' — 점만 있으면 '3.5' 같은 숫자와 헷갈리므로 앞뒤 말이 있어야 합니다.
+const DOT_DATE_BEFORE =
+  /(?:\b(?:by|due)\b|~|마감|제출)\s*[([]?\s*(\d{1,2})\.(\d{1,2})\s*[)\]]?\s*(?:까지|마감|제출)?/i
+const DOT_DATE_AFTER = /[([]?\s*(\d{1,2})\.(\d{1,2})\s*[)\]]?\s*(?:까지|마감|제출)/i
+
+/**
+ * 숙제 한 줄에서 마감 날짜 표기를 찾아 떼어 냅니다.
+ * 'Jw p.24 By 9/15' → { title: 'Jw p.24', due: { month: 9, day: 15 } }
+ * 날짜가 없으면 due 는 null 이고 title 은 원래 줄 그대로입니다.
+ */
+export function splitDueHint(line: string): { title: string; due: DueHint | null } {
+  for (const re of [SLASH_DATE, DOT_DATE_BEFORE, DOT_DATE_AFTER]) {
+    const m = re.exec(line)
+    if (!m || m.index === undefined) continue
+    const month = Number(m[1])
+    const day = Number(m[2])
+    if (month < 1 || month > 12 || day < 1 || day > 31) continue
+
+    const title = (line.slice(0, m.index) + ' ' + line.slice(m.index + m[0].length))
+      .replace(/\s+/g, ' ')
+      .replace(/[\s\-–:,]+$/, '')
+      .trim()
+    return { title: title || line, due: { month, day } }
+  }
+  return { title: line, due: null }
 }

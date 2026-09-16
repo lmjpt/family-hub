@@ -2,11 +2,25 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import Modal from '../../components/Modal'
 import { addTask, useDb } from '../../lib/db'
-import { dayKeyToIso, isoToSeoulInput, seoulInputToIso, todayKey } from '../../lib/date'
-import { readTextFromImage, toHomeworkLines } from '../../lib/ocr'
-import type { OcrProgress } from '../../lib/ocr'
+import {
+  dayKeyToIso,
+  formatDayLabel,
+  isoToSeoulInput,
+  monthDayToKey,
+  seoulInputToIso,
+  todayKey,
+} from '../../lib/date'
+import { readTextFromImage, splitDueHint, toHomeworkLines } from '../../lib/ocr'
+import type { OcrLanguage, OcrProgress } from '../../lib/ocr'
 
 const SUBJECTS = ['', '국어', '수학', '영어', '사회', '과학', '기타'] as const
+
+/** 같은 학원 사진을 계속 올리므로 마지막 선택을 기기에 기억해 둡니다. */
+const LANGUAGE_KEY = 'family-hub-ocr-language'
+
+function loadLanguage(): OcrLanguage {
+  return localStorage.getItem(LANGUAGE_KEY) === 'eng' ? 'eng' : 'kor+eng'
+}
 
 interface Props {
   open: boolean
@@ -32,6 +46,7 @@ export default function ImportFromPhoto({ open, onClose }: Props) {
   const [progress, setProgress] = useState<OcrProgress>({ label: '', ratio: 0 })
   const [text, setText] = useState('')
   const [error, setError] = useState('')
+  const [language, setLanguage] = useState<OcrLanguage>(loadLanguage)
 
   const [assigneeId, setAssigneeId] = useState('')
   const [due, setDue] = useState('')
@@ -52,13 +67,27 @@ export default function ImportFromPhoto({ open, onClose }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  const lines = useMemo(() => toHomeworkLines(text), [text])
+  // 한 줄 = 숙제 하나. 줄에 'By 9/15' 같은 날짜가 있으면 그 줄의 마감으로 씁니다.
+  const items = useMemo(
+    () =>
+      toHomeworkLines(text).map((line) => {
+        const { title, due } = splitDueHint(line)
+        return { title, dayKey: due ? monthDayToKey(due.month, due.day) : null }
+      }),
+    [text],
+  )
+  const hasLineDue = items.some((it) => it.dayKey !== null)
+
+  function chooseLanguage(next: OcrLanguage) {
+    setLanguage(next)
+    localStorage.setItem(LANGUAGE_KEY, next)
+  }
 
   async function handleFile(file: File) {
     setStep('reading')
     setError('')
     try {
-      const result = await readTextFromImage(file, setProgress)
+      const result = await readTextFromImage(file, setProgress, language)
       const found = toHomeworkLines(result)
       setText(found.join('\n'))
       setStep('review')
@@ -82,12 +111,14 @@ export default function ImportFromPhoto({ open, onClose }: Props) {
   }
 
   function save() {
-    for (const line of lines) {
+    // 폼의 마감 시각(예: 21:00)은 날짜가 적힌 줄에도 똑같이 적용합니다.
+    const time = due.slice(11, 16) || '21:00'
+    for (const item of items) {
       addTask({
-        title: line,
+        title: item.title,
         kind: 'homework',
         assigneeId: assigneeId || null,
-        dueAt: seoulInputToIso(due),
+        dueAt: item.dayKey ? dayKeyToIso(item.dayKey, time) : seoulInputToIso(due),
         status: 'todo',
         subject: subject || null,
         rewardPoints: Math.max(0, points),
@@ -106,10 +137,10 @@ export default function ImportFromPhoto({ open, onClose }: Props) {
           <button
             type="button"
             onClick={save}
-            disabled={lines.length === 0}
+            disabled={items.length === 0}
             className="btn btn-primary flex-1"
           >
-            숙제 {lines.length}개 추가
+            숙제 {items.length}개 추가
           </button>
         ) : undefined
       }
@@ -159,6 +190,23 @@ export default function ImportFromPhoto({ open, onClose }: Props) {
             onChange={onPick}
           />
 
+          <label className="flex items-center gap-3 rounded-xl bg-cream px-4 py-3 text-sm">
+            <input
+              type="checkbox"
+              className="h-5 w-5"
+              checked={language === 'eng'}
+              onChange={(e) => chooseLanguage(e.target.checked ? 'eng' : 'kor+eng')}
+            />
+            <span>
+              <b>영어로만 적힌 사진이에요</b>
+              <br />
+              <span className="text-muted">
+                영어 학원 숙제처럼 한글이 없으면 켜 두세요. 영어를 한글로 잘못 읽는
+                일이 줄어요.
+              </span>
+            </span>
+          </label>
+
           <button
             type="button"
             onClick={() => setStep('review')}
@@ -207,7 +255,8 @@ export default function ImportFromPhoto({ open, onClose }: Props) {
               placeholder={'수학 익힘책 24~25쪽\n영어 단어 20개 외우기'}
             />
             <p className="mt-1.5 text-xs text-muted">
-              잘못 읽은 글자는 여기서 고치세요. 빈 줄은 그냥 넘어갑니다.
+              잘못 읽은 글자는 여기서 고치세요. 빈 줄은 그냥 넘어갑니다. 줄 끝에
+              <b> By 9/15</b> 처럼 날짜를 적으면 그 숙제의 마감이 됩니다.
             </p>
           </div>
 
@@ -255,7 +304,7 @@ export default function ImportFromPhoto({ open, onClose }: Props) {
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="label" htmlFor="ocr-due">
-                마감
+                {hasLineDue ? '마감 (날짜가 없는 줄만)' : '마감'}
               </label>
               <input
                 id="ocr-due"
@@ -280,17 +329,22 @@ export default function ImportFromPhoto({ open, onClose }: Props) {
             </div>
           </div>
 
-          {lines.length > 0 && (
+          {items.length > 0 && (
             <div>
               <span className="label">이렇게 만들어집니다</span>
               <ul className="space-y-1">
-                {lines.map((line, i) => (
+                {items.map((item, i) => (
                   <li
-                    key={`${i}-${line}`}
+                    key={`${i}-${item.title}`}
                     className="flex items-center gap-2 rounded-xl bg-cream px-3 py-2 text-sm"
                   >
                     <span aria-hidden="true">📚</span>
-                    <span className="min-w-0 flex-1 truncate">{line}</span>
+                    <span className="min-w-0 flex-1 truncate">{item.title}</span>
+                    {item.dayKey && (
+                      <span className="shrink-0 text-xs font-semibold text-muted">
+                        {formatDayLabel(item.dayKey)}까지
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>

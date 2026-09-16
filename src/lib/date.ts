@@ -92,6 +92,27 @@ export function addDays(key: DayKey, days: number): DayKey {
   return d.toISOString().slice(0, 10)
 }
 
+/**
+ * '9/15' 처럼 월·일만 있는 날짜를 날짜 키로 만듭니다 (숙제 사진의 마감 표기용).
+ * 연도는 오늘 기준으로 고릅니다. 두 달 넘게 지난 날짜면 내년으로 봅니다
+ * (12월에 받은 '1/10' 숙제는 내년 1월). 2/30 처럼 없는 날짜는 null.
+ */
+export function monthDayToKey(
+  month: number,
+  day: number,
+  today: DayKey = todayKey(),
+): DayKey | null {
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null
+  const year = Number(today.slice(0, 4))
+  for (const y of [year, year + 1]) {
+    const d = new Date(Date.UTC(y, month - 1, day, 12))
+    if (d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day) return null
+    const key = d.toISOString().slice(0, 10)
+    if (key >= addDays(today, -60)) return key
+  }
+  return null
+}
+
 /** 달력 그리드용. 해당 월이 포함된 주 전체(일요일 시작)를 6주 42칸으로 반환. */
 export function monthGrid(year: number, month: number): DayKey[] {
   const first = `${year}-${String(month).padStart(2, '0')}-01`
