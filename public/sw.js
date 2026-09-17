@@ -19,8 +19,11 @@ self.addEventListener('push', (event) => {
   const title = data.title || '우리집'
   const options = {
     body: data.body || '',
+    // 알림 안에 크게 보이는 그림 (색 있음)
     icon: './icon-192.png',
-    badge: './icon-192.png',
+    // 상태 표시줄의 작은 아이콘. 안드로이드는 이 그림의 불투명한 부분을 전부 흰색으로 칠하므로
+    // 반드시 '투명 배경 + 흰 실루엣' 이어야 합니다. 색 있는 앱 아이콘을 넣으면 흰 네모가 됩니다.
+    badge: './badge-96.png',
     // 같은 tag 는 새 알림이 이전 것을 덮어씁니다. 대화가 여러 개 와도 한 줄만 남게.
     tag: data.tag || 'family-hub',
     renotify: true,
