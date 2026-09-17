@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 안드로이드 13+ 에서 알림을 띄우려면 앱이 이 권한을 가져야 합니다 (크롬이 앱 이름으로 알림을 냄) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:allowBackup="false"
@@ -47,6 +49,21 @@
                     android:pathPrefix="/family-hub" />
             </intent-filter>
         </activity>
+
+        <!--
+          알림 위임. 이게 있으면 크롬이 웹 푸시 알림을 '크롬' 이 아니라 '우리집' 앱 이름으로
+          띄우고, 폰 설정 → 알림 목록에도 우리집이 나타납니다. 없으면 알림 권한이 크롬의
+          사이트 설정에 숨어 있어서 가족이 찾을 수 없습니다.
+        -->
+        <service
+            android:name="com.google.androidbrowserhelper.trusted.DelegationService"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.support.customtabs.trusted.TRUSTED_WEB_ACTIVITY_SERVICE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
 
         <!-- 웹 화면의 '위젯 연결' 버튼이 familyhub://widget?token=... 로 열어 주는 곳 -->
         <activity

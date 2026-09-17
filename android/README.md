@@ -74,6 +74,19 @@ android/app/src/main/
 `RelativeLayout`, `TextView`, `ImageView`, `Button`, `ProgressBar` 정도입니다. plain `View`,
 `ConstraintLayout`, 커스텀 뷰를 넣으면 빌드는 되지만 **폰에서 빈 상자만 보입니다.**
 
+## 알림이 안 올 때
+
+앱의 알림은 웹 푸시이고, 크롬이 대신 띄웁니다. 앱(1.3+)에 알림 위임(DelegationService)이
+있어서 폰 설정 → 알림에 **우리집** 이 나타나고 알림도 우리집 이름으로 옵니다.
+
+- 앱의 설정 → 알림 버튼이 "폰 설정에서 허용해 주세요" 라고 하면 크롬이 이 사이트를 **차단**으로
+  기억한 것입니다. 크롬 → ⋮ → 설정 → 사이트 설정 → 알림 → 차단됨 목록에서 `lmjpt.github.io`
+  를 허용으로 바꾸거나 지운 뒤, 앱에서 다시 켭니다.
+- 폰 설정 → 앱 → Chrome → 알림이 꺼져 있으면 모든 사이트 알림이 막힙니다.
+- 서버: `push-webhook.sql.local` 트리거를 실행했는지, 함수 Secrets 에 VAPID 두 개가 있는지.
+  SQL Editor 에서 `select * from net._http_response order by created desc limit 5;` 를 보면
+  최근 웹훅 호출의 응답 코드가 나옵니다. 200 이 아니면 함수 쪽 문제입니다.
+
 ## 앱을 고칠 때
 
 - 화면·기능은 웹만 고치면 됩니다. APK 다시 만들 필요 없습니다.
