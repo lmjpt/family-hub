@@ -26,7 +26,12 @@ self.addEventListener('push', (event) => {
     renotify: true,
     data: { url: data.url || './' },
   }
-  event.waitUntil(self.registration.showNotification(title, options))
+  event.waitUntil(
+    self.registration.showNotification(title, options).catch((err) => {
+      // 알림을 못 띄우면 왜인지 남겨 둡니다 (chrome://inspect 로 볼 수 있음).
+      console.error('알림 표시 실패', err)
+    }),
+  )
 })
 
 self.addEventListener('notificationclick', (event) => {

@@ -46,7 +46,8 @@ async function sendTo(sub: Subscription, message: string): Promise<string | null
     await webpush.sendNotification(
       { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
       message,
-      { TTL: 60 * 60 * 24 },
+      // urgency high: 폰이 절전 상태여도 바로 깨워 전달합니다. 가족 대화는 미뤄질 이유가 없습니다.
+      { TTL: 60 * 60 * 24, urgency: 'high' },
     )
     return null
   } catch (err) {

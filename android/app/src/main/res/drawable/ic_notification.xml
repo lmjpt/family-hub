@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 상태 표시줄용 작은 알림 아이콘(집 모양). 안드로이드 알림은 단색 작은 아이콘이 없으면
+     조용히 버려질 수 있어서 반드시 하나 둡니다. 색은 시스템이 칠하므로 흰색 단색이면 됩니다. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M10,20v-6h4v6h5v-8h3L12,3 2,12h3v8z" />
+</vector>

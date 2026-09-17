@@ -59,6 +59,10 @@
             android:name="com.google.androidbrowserhelper.trusted.DelegationService"
             android:enabled="true"
             android:exported="true">
+            <!-- 알림 상태 표시줄에 쓸 작은 아이콘. 없으면 알림이 표시되지 않을 수 있습니다. -->
+            <meta-data
+                android:name="android.support.customtabs.trusted.SMALL_ICON"
+                android:resource="@drawable/ic_notification" />
             <intent-filter>
                 <action android:name="android.support.customtabs.trusted.TRUSTED_WEB_ACTIVITY_SERVICE" />
                 <category android:name="android.intent.category.DEFAULT" />
