@@ -1,12 +1,14 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useDb } from '../lib/db'
 import { useSession } from '../features/auth'
+import { useUnreadCount } from '../features/chat/unread'
 import Avatar from './Avatar'
 
 const NAV = [
   { to: '/', emoji: '📅', label: '일정' },
   { to: '/tasks', emoji: '🧹', label: '할일' },
   { to: '/homework', emoji: '📚', label: '숙제' },
+  { to: '/chat', emoji: '💬', label: '대화' },
   { to: '/points', emoji: '⭐', label: '포인트' },
   { to: '/settings', emoji: '⚙️', label: '설정' },
 ] as const
@@ -14,6 +16,7 @@ const NAV = [
 export default function Layout() {
   const db = useDb()
   const { me, logout } = useSession()
+  const unread = useUnreadCount(me, db.messages)
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-2xl flex-col">
@@ -45,7 +48,7 @@ export default function Layout() {
                 to={item.to}
                 end={item.to === '/'}
                 className={({ isActive }) =>
-                  `flex flex-col items-center gap-0.5 py-2.5 text-xs font-semibold transition-colors ${
+                  `relative flex flex-col items-center gap-0.5 py-2.5 text-xs font-semibold transition-colors ${
                     isActive ? 'text-brand' : 'text-muted'
                   }`
                 }
@@ -54,6 +57,14 @@ export default function Layout() {
                   {item.emoji}
                 </span>
                 {item.label}
+                {item.to === '/chat' && unread > 0 && (
+                  <span
+                    className="absolute top-1 right-1/2 -mr-6 min-w-5 rounded-full bg-brand px-1.5 py-0.5 text-center text-[11px] font-bold leading-none text-white"
+                    aria-label={`안 읽은 메시지 ${unread}개`}
+                  >
+                    {unread > 99 ? '99+' : unread}
+                  </span>
+                )}
               </NavLink>
             </li>
           ))}

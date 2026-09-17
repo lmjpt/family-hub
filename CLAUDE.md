@@ -17,6 +17,7 @@
 | **할일 공유** | 집안일 등 할 일을 만들고 담당자를 지정. 완료 체크 |
 | **숙제 관리** | 아이별 숙제 등록, 마감일, 제출/확인 상태. 부모가 확인 처리. 학원 숙제 사진에서 글자를 읽어 한 번에 등록 |
 | **칭찬 / 벌점** | 잘한 일은 +점, 규칙 위반은 -점. 아이별 누적 포인트와 이력 |
+| **대화** | 가족 대화방 하나. 아이 폰에 카톡이 없어서 이 앱이 유일한 연락 수단 |
 
 ### 설계 의도 (중요)
 
@@ -66,7 +67,7 @@ PIN 을 다시 받습니다.** 아이가 부모 폰을 집어들어도 부모 �
 
 ## 3. 데이터 모델
 
-테이블 6개면 충분합니다. 필요해지기 전에 늘리지 마세요.
+테이블 7개면 충분합니다. 필요해지기 전에 늘리지 마세요.
 
 ```
 family          가족 (한 행만 존재)
@@ -90,6 +91,9 @@ point_entry     칭찬 / 벌점 이력
 
 reward          포인트로 바꾸는 보상
   id, family_id, title, cost_points, active
+
+message         가족 대화방 메시지 (방은 가족당 하나라 방 테이블은 없음)
+  id, family_id, sender_id, body, created_at
 ```
 
 ### 규칙
@@ -99,6 +103,7 @@ reward          포인트로 바꾸는 보상
 - **삭제는 하드 삭제.** 가족 앱에 감사 로그는 과합니다. 단, `point_entry`만은 지우지 말고 취소용 반대 부호 항목을 추가하세요 (아이와 분쟁이 생겼을 때 기록이 남아야 함).
 - **숙제를 완료하면 자동으로 포인트가 붙지 않습니다.** 부모가 `confirmed`로 바꿀 때 `reward_points`만큼 `point_entry`가 생깁니다.
 - **사진은 어디에도 저장하지 않습니다.** 숙제 사진은 글자만 뽑아내고 버립니다. 테이블에 이미지 컬럼을 추가하지 마세요 (아래 참고).
+- **대화는 최근 200개만 읽습니다.** 쌓이기만 하는 유일한 테이블이라 전체 다시 읽기 규칙의 예외입니다. '어디까지 읽었나'는 기기(localStorage)에만 두고 서버에 읽음 테이블을 만들지 마세요. `message` 테이블이 없으면(schema.sql 재실행 전) 대화 탭만 '준비 중'으로 보이고 나머지는 그대로 돕니다.
 
 ## 4. 권한
 
@@ -114,6 +119,8 @@ reward          포인트로 바꾸는 보상
 | 칭찬/벌점 주기 | O | X |
 | 포인트 이력 보기 | 전원 | 본인 것만 |
 | 구성원 관리 | O | X |
+| 대화 보내기 | O | O |
+| 메시지 지우기 | O | X |
 
 규칙은 `src/lib/permissions.ts` 한 곳에 모여 있습니다. 버튼을 숨길 때도, 실제로
 데이터를 바꾸기 직전에도 같은 함수를 쓰세요.
@@ -138,8 +145,8 @@ reward          포인트로 바꾸는 보상
 
 ```
 src/
-  pages/          라우트 단위 화면 (Login, Calendar, Tasks, Homework, Points, Settings)
-  components/     재사용 UI (Layout, Modal, Avatar, EmptyState)
+  pages/          라우트 단위 화면 (Login, Calendar, Tasks, Homework, Chat, Points, Settings)
+  components/     재사용 UI (Layout, Modal, Avatar, EmptyState, DateTimeField)
   features/
     familyAuth.tsx 1단계 — 가족 계정 (기기마다 한 번)
     auth.tsx      2단계 — 누구세요 (얼굴 + PIN)
@@ -147,6 +154,7 @@ src/
     tasks/        할일·숙제 (TaskBoard / TaskRow / TaskForm)
                   + ImportFromPhoto — 사진에서 숙제 가져오기
     points/       칭찬·벌점 주기
+    chat/         대화방 (MessageList / Composer / unread — 안 읽은 개수는 기기에만)
     members/      구성원 폼
   lib/
     supabase.ts   서버 연결 (.env.local 을 읽습니다)

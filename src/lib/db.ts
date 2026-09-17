@@ -22,6 +22,7 @@ import type {
   Family,
   FamilyEvent,
   Member,
+  Message,
   PointEntry,
   Reward,
   Task,
@@ -34,6 +35,8 @@ export interface DbShape {
   tasks: Task[]
   points: PointEntry[]
   rewards: Reward[]
+  /** 최근 대화만 (오래된 순). 전부 다 들고 있지는 않습니다. */
+  messages: Message[]
 }
 
 /** 아직 아무것도 못 읽었을 때의 빈 상태 */
@@ -44,7 +47,14 @@ const EMPTY: DbShape = {
   tasks: [],
   points: [],
   rewards: [],
+  messages: [],
 }
+
+/**
+ * 대화는 쌓이기만 하므로 최근 것만 읽습니다. 가족 대화방에서 이보다 위로
+ * 올라가 볼 일은 거의 없고, 있으면 그때 '더 보기'를 붙이면 됩니다.
+ */
+const MESSAGE_LIMIT = 200
 
 export type DbStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -164,6 +174,22 @@ const fromReward = (r: Partial<Reward>): Row => prune({
   active: r.active,
 })
 
+const toMessage = (r: Row): Message => ({
+  id: r.id,
+  familyId: r.family_id,
+  senderId: r.sender_id,
+  body: r.body,
+  createdAt: r.created_at,
+})
+
+const fromMessage = (m: Partial<Message>): Row => prune({
+  id: m.id,
+  family_id: m.familyId,
+  sender_id: m.senderId,
+  body: m.body,
+  created_at: m.createdAt,
+})
+
 /** undefined 인 칸을 빼서, 부분 수정이 다른 칸을 null 로 덮어쓰지 않게 합니다. */
 function prune(row: Row): Row {
   const out: Row = {}
@@ -179,6 +205,11 @@ let status: DbStatus = 'idle'
 let familyId = ''
 /** 연결에 실패했을 때 화면에 그대로 보여 줄 원인. 없으면 빈 문자열. */
 let lastError = ''
+/**
+ * message 테이블이 아직 없으면(schema.sql 을 다시 실행하기 전) false.
+ * 대화방만 '준비 중' 으로 보여 주고 나머지 앱은 그대로 돕니다.
+ */
+let chatReady = true
 const listeners = new Set<() => void>()
 
 function notify() {
@@ -203,6 +234,12 @@ function subscribe(listener: () => void): () => void {
 export const getState = (): DbShape => state
 const getStatus = (): DbStatus => status
 const getError = (): string => lastError
+const getChatReady = (): boolean => chatReady
+
+/** 대화방을 쓸 수 있는지. false 면 서버에 message 테이블이 없는 것입니다. */
+export function useChatReady(): boolean {
+  return useSyncExternalStore(subscribe, getChatReady, getChatReady)
+}
 
 /** 연결 실패 원인. 화면에 그대로 보여 주기 위한 것입니다. */
 export function useDbError(): string {
@@ -230,17 +267,29 @@ export function useDbStatus(): DbStatus {
 // ── 읽기 ──────────────────────────────────────────────────────
 
 async function loadAll(id: string): Promise<void> {
-  const [family, members, events, tasks, points, rewards] = await Promise.all([
+  const [family, members, events, tasks, points, rewards, messages] = await Promise.all([
     supabase.from('family').select('*').eq('id', id).single(),
     supabase.from('member').select('*').eq('family_id', id).order('created_at'),
     supabase.from('event').select('*').eq('family_id', id),
     supabase.from('task').select('*').eq('family_id', id),
     supabase.from('point_entry').select('*').eq('family_id', id),
     supabase.from('reward').select('*').eq('family_id', id),
+    supabase
+      .from('message')
+      .select('*')
+      .eq('family_id', id)
+      .order('created_at', { ascending: false })
+      .limit(MESSAGE_LIMIT),
   ])
 
   const failed = [family, members, events, tasks, points, rewards].find((r) => r.error)
   if (failed?.error) throw failed.error
+
+  // 대화방 테이블만 없어도 앱 전체가 멈추면 안 됩니다.
+  if (messages.error) {
+    console.warn('대화방을 읽지 못했습니다 (schema.sql 을 다시 실행했나요?)', messages.error)
+  }
+  chatReady = !messages.error
 
   setState({
     family: { id: family.data!.id, name: family.data!.name },
@@ -249,6 +298,7 @@ async function loadAll(id: string): Promise<void> {
     tasks: (tasks.data ?? []).map(toTask),
     points: (points.data ?? []).map(toPoint),
     rewards: (rewards.data ?? []).map(toReward),
+    messages: (messages.data ?? []).map(toMessage).reverse(),
   })
 }
 
@@ -302,7 +352,10 @@ let channel: ReturnType<typeof supabase.channel> | null = null
 
 function watch(id: string) {
   channel = supabase.channel(`family-${id}`)
-  for (const table of ['family', 'member', 'event', 'task', 'point_entry', 'reward']) {
+  const tables = ['family', 'member', 'event', 'task', 'point_entry', 'reward']
+  // 없는 테이블을 구독하면 채널 전체가 실패하므로 있을 때만 넣습니다.
+  if (chatReady) tables.push('message')
+  for (const table of tables) {
     channel.on(
       'postgres_changes',
       {
@@ -583,6 +636,30 @@ export function redeemReward(rewardId: string, memberId: string, byMemberId: str
   })
 }
 
+// ── 대화 ──────────────────────────────────────────────────────
+
+export function sendMessage(senderId: string, body: string) {
+  const text = body.trim()
+  if (!text) return null
+  const message: Message = {
+    id: newId(),
+    familyId,
+    senderId,
+    body: text.slice(0, 1000),
+    createdAt: new Date().toISOString(),
+  }
+  write({ ...state, messages: [...state.messages, message] }, () =>
+    supabase.from('message').insert(fromMessage(message)),
+  )
+  return message
+}
+
+export function removeMessage(id: string) {
+  write({ ...state, messages: state.messages.filter((m) => m.id !== id) }, () =>
+    supabase.from('message').delete().eq('id', id),
+  )
+}
+
 // ── 백업 ──────────────────────────────────────────────────────
 // 이제 내용은 Supabase 에 있지만, 통째로 받아 둘 수 있는 길은 남겨 둡니다.
 
@@ -612,6 +689,9 @@ export async function importJson(json: string): Promise<void> {
   await supabase.from('task').insert(withFamily(parsed.tasks ?? []).map(fromTask))
   await supabase.from('point_entry').insert(withFamily(parsed.points ?? []).map(fromPoint))
   await supabase.from('reward').insert(withFamily(parsed.rewards ?? []).map(fromReward))
+  if (parsed.messages?.length) {
+    await supabase.from('message').insert(withFamily(parsed.messages).map(fromMessage))
+  }
 
   await supabase.from('family').update({ name: parsed.family.name }).eq('id', familyId)
   await reload()

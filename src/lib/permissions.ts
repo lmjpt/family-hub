@@ -59,3 +59,13 @@ export function canManageMembers(me: Member | null): boolean {
 export function canManageRewards(me: Member | null): boolean {
   return isParent(me)
 }
+
+/** 대화는 가족 모두. */
+export function canChat(me: Member | null): boolean {
+  return me !== null
+}
+
+/** 메시지 지우기는 부모만. 아이가 실수로 지우거나 다투다 지우는 일을 막습니다. */
+export function canDeleteMessage(me: Member | null): boolean {
+  return isParent(me)
+}

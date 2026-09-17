@@ -5,6 +5,7 @@ import { useMe } from './features/auth'
 import { useFamilyAuth } from './features/familyAuth'
 import { useDbError, useDbStatus } from './lib/db'
 import Calendar from './pages/Calendar'
+import Chat from './pages/Chat'
 import FamilyLogin from './pages/FamilyLogin'
 import Homework from './pages/Homework'
 import Login from './pages/Login'
@@ -52,6 +53,7 @@ export default function App() {
         <Route path="/" element={<Calendar />} />
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/homework" element={<Homework />} />
+        <Route path="/chat" element={<Chat />} />
         <Route path="/points" element={<Points />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />

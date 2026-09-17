@@ -80,3 +80,12 @@ export interface Reward {
   costPoints: number
   active: boolean
 }
+
+/** 가족 대화방 메시지. 방은 가족당 하나뿐입니다. */
+export interface Message {
+  id: string
+  familyId: string
+  senderId: string
+  body: string
+  createdAt: string
+}

@@ -78,6 +78,16 @@ create table if not exists reward (
   active      boolean not null default true
 );
 
+-- 가족 대화방. 아이 폰에 카톡이 없어서 이 앱이 유일한 연락 수단입니다.
+-- 방은 가족당 하나뿐이라 '방' 테이블은 따로 두지 않습니다.
+create table if not exists message (
+  id         uuid primary key default gen_random_uuid(),
+  family_id  uuid not null references family(id) on delete cascade,
+  sender_id  uuid not null references member(id) on delete cascade,
+  body       text not null check (length(body) between 1 and 1000),
+  created_at timestamptz not null default now()
+);
+
 -- 같은 숙제로 포인트가 두 번 들어가는 것을 DB 차원에서 막습니다.
 -- 아이가 완료 체크를 껐다 켜도 점수는 한 번만 지급됩니다.
 create unique index if not exists point_entry_task_once
@@ -89,6 +99,7 @@ create index if not exists event_family_start_idx on event (family_id, starts_at
 create index if not exists task_family_kind_idx on task (family_id, kind, status);
 create index if not exists point_entry_member_idx on point_entry (member_id, created_at desc);
 create index if not exists reward_family_idx on reward (family_id);
+create index if not exists message_family_created_idx on message (family_id, created_at desc);
 
 -- ── 접근 권한 (RLS) ───────────────────────────────────────────
 -- 로그인한 가족 계정은 '자기 가족의 줄'만 읽고 쓸 수 있습니다.
@@ -100,6 +111,7 @@ alter table event       enable row level security;
 alter table task        enable row level security;
 alter table point_entry enable row level security;
 alter table reward      enable row level security;
+alter table message     enable row level security;
 
 drop policy if exists family_own on family;
 create policy family_own on family
@@ -138,17 +150,27 @@ create policy reward_own on reward
   using (family_id in (select id from family where owner_id = auth.uid()))
   with check (family_id in (select id from family where owner_id = auth.uid()));
 
+drop policy if exists message_own on message;
+create policy message_own on message
+  for all to authenticated
+  using (family_id in (select id from family where owner_id = auth.uid()))
+  with check (family_id in (select id from family where owner_id = auth.uid()));
+
 -- ── 실시간 반영 ───────────────────────────────────────────────
 -- 엄마가 숙제를 올리면 아이 폰에 새로고침 없이 바로 뜨게 합니다.
+-- 테이블마다 따로 검사해야, 나중에 테이블을 추가하고 이 파일을 다시
+-- 실행했을 때 새 테이블만 빠짐없이 들어갑니다.
 
 do $$
+declare
+  t text;
 begin
-  alter publication supabase_realtime add table family;
-  alter publication supabase_realtime add table member;
-  alter publication supabase_realtime add table event;
-  alter publication supabase_realtime add table task;
-  alter publication supabase_realtime add table point_entry;
-  alter publication supabase_realtime add table reward;
-exception
-  when duplicate_object then null;  -- 이미 추가돼 있으면 넘어갑니다
+  foreach t in array array['family', 'member', 'event', 'task', 'point_entry', 'reward', 'message'] loop
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
+    ) then
+      execute format('alter publication supabase_realtime add table %I', t);
+    end if;
+  end loop;
 end $$;
