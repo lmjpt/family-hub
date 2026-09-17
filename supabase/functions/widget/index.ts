@@ -4,7 +4,10 @@
 // 한 줄이 생기고, 그 값이 폰의 위젯에 저장됩니다. 위젯은 그 토큰만 보냅니다 —
 // 가족 계정의 비밀번호나 세션은 폰의 네이티브 쪽에 두지 않습니다.
 //
-// Verify JWT 는 꺼야 합니다 (토큰이 JWT 가 아님). 배포 방법은 android/README.md.
+// 위젯은 헤더 두 개를 보냅니다:
+//   apikey: <publishable 키>   ← Supabase 게이트웨이가 요구 (Verify JWT 켜 둔 채로 통과)
+//   X-Widget-Token: <위젯 토큰> ← 이 함수가 검사
+// 배포 방법은 android/README.md.
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
@@ -36,7 +39,19 @@ function dateLabel(key: string): string {
 const clip = (s: string, n = 28) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
 
 Deno.serve(async (req) => {
-  const token = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '').trim()
+  try {
+    return await handle(req)
+  } catch (err) {
+    // 원인을 숨기면 폰에서 '불러오지 못했어요 (500)' 만 보이고 고칠 수 없습니다.
+    console.error('widget 함수 오류', err)
+    return Response.json({ error: String(err) }, { status: 500 })
+  }
+})
+
+async function handle(req: Request): Promise<Response> {
+  const token =
+    req.headers.get('x-widget-token')?.trim() ||
+    (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '').trim()
   if (!token) return Response.json({ error: '토큰이 없습니다' }, { status: 401 })
 
   const { data: link } = await supabase
@@ -100,4 +115,4 @@ Deno.serve(async (req) => {
     },
     { headers: { 'Cache-Control': 'no-store' } },
   )
-})
+}

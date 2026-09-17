@@ -27,6 +27,12 @@ object WidgetData {
     private const val ENDPOINT = "https://cluemjqdqqtmkezjqcag.supabase.co/functions/v1/widget"
     private const val APP_URL = "https://lmjpt.github.io/family-hub/"
 
+    /**
+     * Supabase 게이트웨이가 요구하는 공개 키. 비밀이 아닙니다 (웹 번들에도 그대로 들어 있음).
+     * 진짜 보호는 RLS 와 위젯 토큰이 합니다.
+     */
+    private const val PUBLISHABLE_KEY = "sb_publishable_EYSyYqcPSgZeo8jdeG1LAA_LB02jXyT"
+
     const val PREFS = "widget"
     const val KEY_TOKEN = "token"
 
@@ -44,7 +50,8 @@ object WidgetData {
                 requestMethod = "GET"
                 connectTimeout = 8000
                 readTimeout = 8000
-                setRequestProperty("Authorization", "Bearer $token")
+                setRequestProperty("apikey", PUBLISHABLE_KEY)
+                setRequestProperty("X-Widget-Token", token)
             }
             val code = conn.responseCode
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
@@ -53,7 +60,12 @@ object WidgetData {
 
             when {
                 code == 401 -> Data("우리집", listOf("연결이 끊겼어요. 앱에서 위젯 연결을 다시 눌러 주세요"), "")
-                code !in 200..299 -> Data("우리집", listOf("불러오지 못했어요 ($code)"), "")
+                code == 404 -> Data("우리집", listOf("서버에 widget 함수가 아직 없어요 (README 2단계)"), "")
+                code !in 200..299 -> {
+                    // 서버가 원인을 JSON 으로 주면 그대로 보여 줘서 고칠 수 있게 합니다.
+                    val reason = try { JSONObject(body).optString("error", "") } catch (e: Exception) { "" }
+                    Data("우리집", listOf("불러오지 못했어요 ($code)", reason).filter { it.isNotBlank() }, "")
+                }
                 else -> {
                     val json = JSONObject(body)
                     val arr = json.getJSONArray("lines")

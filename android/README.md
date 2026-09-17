@@ -43,8 +43,19 @@ android/app/src/main/
 2. Edge Functions → Deploy a new function → Via Editor → 이름 **`widget`** →
    `supabase/functions/widget/index.ts` 내용을 붙여넣고 Deploy.
    이름이 다르면 `WidgetData.kt` 의 `ENDPOINT` 끝부분도 맞춰야 합니다.
-3. 그 함수의 **Verify JWT 를 끕니다.** (토큰이 JWT 가 아니라서 켜 두면 401)
+3. Verify JWT 는 켜 두어도 됩니다. 위젯이 `apikey` 헤더(publishable 키)를 함께 보내서
+   게이트웨이를 통과하고, 위젯 토큰은 `X-Widget-Token` 헤더로 따로 보냅니다.
    secret 은 필요 없습니다. Supabase 가 자동으로 넣어 주는 값만 씁니다.
+
+### 위젯에 뜨는 문구로 원인 찾기
+
+| 문구 | 뜻 |
+| --- | --- |
+| 앱을 열고 설정 → 위젯 연결을 눌러 주세요 | 폰에 토큰이 없음. 앱에서 연결 버튼 |
+| 연결이 끊겼어요… | 서버가 401. 토큰이 표에 없음(schema.sql 안 돌림) 또는 함수 코드가 옛 버전 |
+| 서버에 widget 함수가 아직 없어요 | 함수를 아직 배포하지 않았거나 이름이 `widget` 이 아님 |
+| 불러오지 못했어요 (500) + 원인 | 함수 안에서 오류. 그 아래 줄이 원인 문구 |
+| 인터넷에 연결되어 있는지… | 폰이 오프라인 |
 
 ## 폰에 설치하고 위젯 붙이기
 
