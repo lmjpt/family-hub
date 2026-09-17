@@ -65,6 +65,14 @@
             </intent-filter>
         </service>
 
+        <!--
+          웹에서 알림 권한을 요청하면 크롬이 이 투명 화면을 띄워 '우리집' 앱 권한을 묻습니다.
+          (Bubblewrap 이 알림을 켤 때 넣는 선언과 같습니다.) 이게 없으면 크롬 사이트 권한으로 되돌아갑니다.
+        -->
+        <activity
+            android:name="com.google.androidbrowserhelper.trusted.NotificationPermissionRequestActivity"
+            android:exported="false" />
+
         <!-- 웹 화면의 '위젯 연결' 버튼이 familyhub://widget?token=... 로 열어 주는 곳 -->
         <activity
             android:name=".WidgetLinkActivity"
