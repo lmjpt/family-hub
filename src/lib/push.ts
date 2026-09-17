@@ -56,10 +56,23 @@ async function currentSubscription(): Promise<PushSubscription | null> {
   return (await reg?.pushManager.getSubscription()) ?? null
 }
 
+/**
+ * 'denied' 라고 해서 버튼을 잠그지 마세요. 안드로이드 앱(TWA) 안에서는 앱이 아직 알림
+ * 권한을 받지 않은 상태가 여기서 'denied' 로 보입니다. 그래도 requestPermission() 을
+ * 부르면 크롬이 앱의 권한 창을 띄워 주므로, 시도는 항상 할 수 있어야 합니다.
+ */
 export async function getPushState(): Promise<PushState> {
   if (!pushSupported()) return needsHomeScreenInstall() ? 'need-install' : 'unsupported'
-  if (Notification.permission === 'denied') return 'denied'
-  return (await currentSubscription()) ? 'on' : 'off'
+  if (await currentSubscription()) return 'on'
+  return Notification.permission === 'denied' ? 'denied' : 'off'
+}
+
+/** 안드로이드 앱(TWA) 안에서 열렸는지. 안내 문구를 고를 때 씁니다. */
+export function inAndroidApp(): boolean {
+  return (
+    /Android/i.test(navigator.userAgent) &&
+    (window.matchMedia('(display-mode: standalone)').matches || document.referrer.startsWith('android-app://'))
+  )
 }
 
 /** 이 기기에서 알림을 켭니다. 실패하면 화면에 보여 줄 문구를 돌려줍니다. */
@@ -73,7 +86,11 @@ export async function enablePush(memberId: string): Promise<string | null> {
   if (!reg) return '알림 준비에 실패했어요.'
 
   const permission = await Notification.requestPermission()
-  if (permission !== 'granted') return '알림이 허용되지 않았어요.'
+  if (permission !== 'granted') {
+    return inAndroidApp()
+      ? '알림이 허용되지 않았어요. 폰 설정 → 애플리케이션 → 우리집 → 알림을 켜고 다시 눌러 주세요. 그래도 안 되면 크롬 → 설정 → 사이트 설정 → 알림에서 lmjpt.github.io 차단을 지워 주세요.'
+      : '알림이 허용되지 않았어요. 브라우저 주소창의 잠금 아이콘 → 권한 → 알림을 허용해 주세요.'
+  }
 
   await navigator.serviceWorker.ready
   const sub =

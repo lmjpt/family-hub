@@ -30,7 +30,9 @@ export default function NotificationSettings() {
     }
   }
 
-  const canToggle = state === 'on' || state === 'off'
+  // 'denied' 도 눌러 볼 수 있게 둡니다. 안드로이드 앱에서는 이 상태에서 누르는 게
+  // 곧 앱 권한 창을 띄우는 길입니다 (lib/push.ts 의 설명 참고).
+  const canToggle = state === 'on' || state === 'off' || state === 'denied'
 
   return (
     <section className="space-y-2">
@@ -48,7 +50,7 @@ export default function NotificationSettings() {
             {state === 'need-install' &&
               '아이폰은 Safari 의 공유 버튼 → "홈 화면에 추가" 로 설치한 다음, 그 아이콘으로 열어서 켤 수 있어요.'}
             {state === 'denied' &&
-              '알림이 꺼져 있어요. 폰 설정 → 이 앱(또는 브라우저) → 알림에서 허용해 주세요.'}
+              '아직 허용되지 않았어요. 켜기를 누르면 권한을 묻는 창이 뜹니다. 창이 안 뜨면 폰 설정 → 애플리케이션 → 우리집 → 알림을 켜 주세요.'}
             {state === 'unsupported' && '이 브라우저에서는 알림을 쓸 수 없어요.'}
           </span>
           {error && <span className="block text-sm text-brand">{error}</span>}
@@ -62,7 +64,7 @@ export default function NotificationSettings() {
           } disabled:opacity-50`}
           aria-pressed={state === 'on'}
         >
-          {state === 'on' ? '켜짐' : '꺼짐'}
+          {state === 'on' ? '켜짐' : state === 'busy' ? '…' : '켜기'}
         </button>
       </div>
     </section>
