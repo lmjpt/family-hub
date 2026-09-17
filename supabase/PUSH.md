@@ -65,6 +65,16 @@ CLI 라면 한 줄로: `npx supabase secrets set --env-file supabase/vapid-keys.
 3. 안 오면 Edge Functions → notify → *Logs* 를 봅니다. `sent: 0` 이면 구독이 없는 것이고,
    `푸시 실패` 가 찍히면 secret 이 틀린 경우가 대부분입니다.
 
+## 알림이 "보냈어요" 인데 폰에 안 뜰 때
+
+- 함수는 외부 라이브러리(npm:web-push) 없이 WebCrypto 로 직접 암호화합니다. 예전 npm 방식은
+  Deno 위에서 겉으로는 성공(201)해도 크롬이 풀 수 없는 암호문을 만들 수 있었습니다.
+- 크롬은 푸시가 도착한 순간 알림 권한이 없다고 판단하면 **그 구독을 조용히 폐기**합니다(다음 발송은
+  410). 그러면 `push_subscription` 에 옛 줄이 남고 폰은 다시 켜야 합니다. 앱(TWA)에서는 "권한" 이
+  우리집 앱의 알림 권한이므로, 폰 설정 → 애플리케이션 → 우리집 → 알림이 켜져 있어야 합니다.
+- 함수는 404/410 을 받으면 그 줄을 지웁니다. 남은 줄 수는 SQL 로 확인:
+  `select m.name, count(*) from push_subscription s join member m on m.id=s.member_id group by 1;`
+
 ## 알아 둘 것
 
 - 본인이 쓴 글은 본인 기기에 알리지 않습니다.

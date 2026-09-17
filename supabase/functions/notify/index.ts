@@ -11,19 +11,20 @@
 // 항상 DB 에서 다시 읽습니다.
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
-import webpush from 'npm:web-push@3.6.7'
+import { sendWebPush } from './webpush.ts'
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
 )
 
-webpush.setVapidDetails(
+// 푸시 서명 키. npm:web-push 대신 옆 파일(webpush.ts)의 WebCrypto 구현을 씁니다.
+const VAPID = {
+  publicKey: Deno.env.get('VAPID_PUBLIC_KEY') ?? '',
+  privateKey: Deno.env.get('VAPID_PRIVATE_KEY') ?? '',
   // 푸시 서버가 문제가 있을 때 연락할 곳. 이메일 대신 앱 주소를 씁니다.
-  Deno.env.get('VAPID_SUBJECT') ?? 'https://lmjpt.github.io/family-hub/',
-  Deno.env.get('VAPID_PUBLIC_KEY')!,
-  Deno.env.get('VAPID_PRIVATE_KEY')!,
-)
+  subject: Deno.env.get('VAPID_SUBJECT') ?? 'https://lmjpt.github.io/family-hub/',
+}
 
 interface WebhookPayload {
   /** 'TEST' 는 앱의 설정 → '테스트 알림 보내기' 가 보내는 것. 그 기기 하나에만 보냅니다. */
@@ -42,22 +43,19 @@ interface Subscription {
 
 /** 한 기기로 보냅니다. 실패하면 사람이 읽을 원인 문구를 돌려줍니다. */
 async function sendTo(sub: Subscription, message: string): Promise<string | null> {
+  if (!VAPID.publicKey || !VAPID.privateKey) return 'VAPID secret 이 없습니다 (Edge Functions → Secrets)'
   try {
-    await webpush.sendNotification(
-      { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-      message,
-      // urgency high: 폰이 절전 상태여도 바로 깨워 전달합니다. 가족 대화는 미뤄질 이유가 없습니다.
-      { TTL: 60 * 60 * 24, urgency: 'high' },
-    )
-    return null
-  } catch (err) {
-    const e = err as { statusCode?: number; body?: string; message?: string }
-    // 404/410 = 그 기기가 알림을 꺼서 더는 유효하지 않은 구독. 정리합니다.
-    if (e.statusCode === 404 || e.statusCode === 410) {
+    // urgency high: 폰이 절전 상태여도 바로 깨워 전달합니다. 가족 대화는 미뤄질 이유가 없습니다.
+    const r = await sendWebPush(sub, message, VAPID, { ttl: 60 * 60 * 24, urgency: 'high' })
+    if (r.ok) return null
+    // 404/410 = 그 기기가 알림을 꺼서(또는 폰이 권한 없음으로 판단해) 더는 유효하지 않은 구독. 정리합니다.
+    if (r.status === 404 || r.status === 410) {
       await supabase.from('push_subscription').delete().eq('endpoint', sub.endpoint)
-      return `구독이 만료되어 지웠습니다 (${e.statusCode})`
+      return `구독이 만료되어 지웠습니다 (${r.status}). 그 폰에서 알림을 다시 켜 주세요.`
     }
-    return `[${e.statusCode ?? '?'}] ${e.message ?? ''} ${e.body ?? ''}`.trim()
+    return `[${r.status}] ${r.body.slice(0, 160)}`.trim()
+  } catch (err) {
+    return `보내는 중 오류: ${err instanceof Error ? err.message : String(err)}`
   }
 }
 
