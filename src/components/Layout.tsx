@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useDb } from '../lib/db'
+import { registerServiceWorker, syncPushSubscription } from '../lib/push'
 import { useSession } from '../features/auth'
 import { useUnreadCount } from '../features/chat/unread'
 import Avatar from './Avatar'
@@ -17,6 +19,13 @@ export default function Layout() {
   const db = useDb()
   const { me, logout } = useSession()
   const unread = useUnreadCount(me, db.messages)
+
+  // 앱에 들어오면 알림용 서비스 워커를 준비하고, 이 기기의 구독을 지금 사람으로 묶습니다.
+  const meId = me?.id ?? null
+  useEffect(() => {
+    void registerServiceWorker()
+    if (meId) void syncPushSubscription(meId)
+  }, [meId])
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-2xl flex-col">

@@ -5,7 +5,7 @@
 // 여기와 똑같은 규칙을 Supabase RLS 로 다시 한 번 강제해야 합니다.
 // 화면에서 버튼을 숨기는 것은 보안이 아닙니다.
 
-import type { FamilyEvent, Member, Task } from '../types'
+import type { Comment, FamilyEvent, Member, Task } from '../types'
 
 export function isParent(me: Member | null): boolean {
   return me?.role === 'parent'
@@ -68,4 +68,15 @@ export function canChat(me: Member | null): boolean {
 /** 메시지 지우기는 부모만. 아이가 실수로 지우거나 다투다 지우는 일을 막습니다. */
 export function canDeleteMessage(me: Member | null): boolean {
   return isParent(me)
+}
+
+/** 댓글은 가족 모두. 아이가 "이거 모르겠어요" 라고 남길 수 있어야 합니다. */
+export function canComment(me: Member | null): boolean {
+  return me !== null
+}
+
+/** 댓글 지우기는 부모, 또는 자기가 쓴 것. */
+export function canDeleteComment(me: Member | null, comment: Comment): boolean {
+  if (!me) return false
+  return isParent(me) || comment.authorId === me.id
 }

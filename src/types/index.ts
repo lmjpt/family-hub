@@ -81,6 +81,17 @@ export interface Reward {
   active: boolean
 }
 
+/** 일정 또는 할일(숙제) 한 항목에 달린 댓글. 둘 중 하나만 채워집니다. */
+export interface Comment {
+  id: string
+  familyId: string
+  eventId: string | null
+  taskId: string | null
+  authorId: string
+  body: string
+  createdAt: string
+}
+
 /** 가족 대화방 메시지. 방은 가족당 하나뿐입니다. */
 export interface Message {
   id: string

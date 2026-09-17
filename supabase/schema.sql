@@ -88,6 +88,32 @@ create table if not exists message (
   created_at timestamptz not null default now()
 );
 
+-- 일정·할일(숙제) 항목마다 달리는 짧은 댓글. "이거 모르겠어요", "확인했어" 정도.
+-- 일정 또는 할일 중 정확히 하나에만 달립니다. 원본이 지워지면 함께 사라집니다.
+create table if not exists comment (
+  id         uuid primary key default gen_random_uuid(),
+  family_id  uuid not null references family(id) on delete cascade,
+  event_id   uuid references event(id) on delete cascade,
+  task_id    uuid references task(id) on delete cascade,
+  author_id  uuid not null references member(id) on delete cascade,
+  body       text not null check (length(body) between 1 and 1000),
+  created_at timestamptz not null default now(),
+  check ((event_id is null) <> (task_id is null))
+);
+
+-- 푸시 알림 구독. 알림을 켠 기기(브라우저)마다 한 줄. 화면에는 나오지 않습니다.
+-- Edge Function(supabase/functions/notify)이 새 메시지·댓글이 생기면 여기 있는
+-- 기기들로 알림을 보냅니다. 보낸 사람 본인 기기는 건너뜁니다.
+create table if not exists push_subscription (
+  id         uuid primary key default gen_random_uuid(),
+  family_id  uuid not null references family(id) on delete cascade,
+  member_id  uuid not null references member(id) on delete cascade,
+  endpoint   text not null unique,
+  p256dh     text not null,
+  auth       text not null,
+  created_at timestamptz not null default now()
+);
+
 -- 같은 숙제로 포인트가 두 번 들어가는 것을 DB 차원에서 막습니다.
 -- 아이가 완료 체크를 껐다 켜도 점수는 한 번만 지급됩니다.
 create unique index if not exists point_entry_task_once
@@ -100,6 +126,9 @@ create index if not exists task_family_kind_idx on task (family_id, kind, status
 create index if not exists point_entry_member_idx on point_entry (member_id, created_at desc);
 create index if not exists reward_family_idx on reward (family_id);
 create index if not exists message_family_created_idx on message (family_id, created_at desc);
+create index if not exists comment_event_idx on comment (event_id) where event_id is not null;
+create index if not exists comment_task_idx on comment (task_id) where task_id is not null;
+create index if not exists push_subscription_family_idx on push_subscription (family_id);
 
 -- ── 접근 권한 (RLS) ───────────────────────────────────────────
 -- 로그인한 가족 계정은 '자기 가족의 줄'만 읽고 쓸 수 있습니다.
@@ -112,6 +141,8 @@ alter table task        enable row level security;
 alter table point_entry enable row level security;
 alter table reward      enable row level security;
 alter table message     enable row level security;
+alter table comment     enable row level security;
+alter table push_subscription enable row level security;
 
 drop policy if exists family_own on family;
 create policy family_own on family
@@ -156,6 +187,18 @@ create policy message_own on message
   using (family_id in (select id from family where owner_id = auth.uid()))
   with check (family_id in (select id from family where owner_id = auth.uid()));
 
+drop policy if exists comment_own on comment;
+create policy comment_own on comment
+  for all to authenticated
+  using (family_id in (select id from family where owner_id = auth.uid()))
+  with check (family_id in (select id from family where owner_id = auth.uid()));
+
+drop policy if exists push_subscription_own on push_subscription;
+create policy push_subscription_own on push_subscription
+  for all to authenticated
+  using (family_id in (select id from family where owner_id = auth.uid()))
+  with check (family_id in (select id from family where owner_id = auth.uid()));
+
 -- ── 실시간 반영 ───────────────────────────────────────────────
 -- 엄마가 숙제를 올리면 아이 폰에 새로고침 없이 바로 뜨게 합니다.
 -- 테이블마다 따로 검사해야, 나중에 테이블을 추가하고 이 파일을 다시
@@ -165,7 +208,7 @@ do $$
 declare
   t text;
 begin
-  foreach t in array array['family', 'member', 'event', 'task', 'point_entry', 'reward', 'message'] loop
+  foreach t in array array['family', 'member', 'event', 'task', 'point_entry', 'reward', 'message', 'comment'] loop
     if not exists (
       select 1 from pg_publication_tables
       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t

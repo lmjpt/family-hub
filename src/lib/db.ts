@@ -19,6 +19,7 @@ import { useSyncExternalStore } from 'react'
 import { supabase } from './supabase'
 import { starterMembers, starterRewards } from './seed'
 import type {
+  Comment,
   Family,
   FamilyEvent,
   Member,
@@ -37,6 +38,8 @@ export interface DbShape {
   rewards: Reward[]
   /** 최근 대화만 (오래된 순). 전부 다 들고 있지는 않습니다. */
   messages: Message[]
+  /** 일정·할일에 달린 댓글 전부 (오래된 순) */
+  comments: Comment[]
 }
 
 /** 아직 아무것도 못 읽었을 때의 빈 상태 */
@@ -48,6 +51,7 @@ const EMPTY: DbShape = {
   points: [],
   rewards: [],
   messages: [],
+  comments: [],
 }
 
 /**
@@ -190,6 +194,26 @@ const fromMessage = (m: Partial<Message>): Row => prune({
   created_at: m.createdAt,
 })
 
+const toComment = (r: Row): Comment => ({
+  id: r.id,
+  familyId: r.family_id,
+  eventId: r.event_id,
+  taskId: r.task_id,
+  authorId: r.author_id,
+  body: r.body,
+  createdAt: r.created_at,
+})
+
+const fromComment = (c: Partial<Comment>): Row => prune({
+  id: c.id,
+  family_id: c.familyId,
+  event_id: c.eventId,
+  task_id: c.taskId,
+  author_id: c.authorId,
+  body: c.body,
+  created_at: c.createdAt,
+})
+
 /** undefined 인 칸을 빼서, 부분 수정이 다른 칸을 null 로 덮어쓰지 않게 합니다. */
 function prune(row: Row): Row {
   const out: Row = {}
@@ -210,6 +234,8 @@ let lastError = ''
  * 대화방만 '준비 중' 으로 보여 주고 나머지 앱은 그대로 돕니다.
  */
 let chatReady = true
+/** comment 테이블이 없으면 false. 댓글 버튼을 숨기고 나머지는 그대로 돕니다. */
+let commentsReady = true
 const listeners = new Set<() => void>()
 
 function notify() {
@@ -235,10 +261,16 @@ export const getState = (): DbShape => state
 const getStatus = (): DbStatus => status
 const getError = (): string => lastError
 const getChatReady = (): boolean => chatReady
+const getCommentsReady = (): boolean => commentsReady
 
 /** 대화방을 쓸 수 있는지. false 면 서버에 message 테이블이 없는 것입니다. */
 export function useChatReady(): boolean {
   return useSyncExternalStore(subscribe, getChatReady, getChatReady)
+}
+
+/** 댓글을 쓸 수 있는지. false 면 서버에 comment 테이블이 없는 것입니다. */
+export function useCommentsReady(): boolean {
+  return useSyncExternalStore(subscribe, getCommentsReady, getCommentsReady)
 }
 
 /** 연결 실패 원인. 화면에 그대로 보여 주기 위한 것입니다. */
@@ -267,29 +299,32 @@ export function useDbStatus(): DbStatus {
 // ── 읽기 ──────────────────────────────────────────────────────
 
 async function loadAll(id: string): Promise<void> {
-  const [family, members, events, tasks, points, rewards, messages] = await Promise.all([
-    supabase.from('family').select('*').eq('id', id).single(),
-    supabase.from('member').select('*').eq('family_id', id).order('created_at'),
-    supabase.from('event').select('*').eq('family_id', id),
-    supabase.from('task').select('*').eq('family_id', id),
-    supabase.from('point_entry').select('*').eq('family_id', id),
-    supabase.from('reward').select('*').eq('family_id', id),
-    supabase
-      .from('message')
-      .select('*')
-      .eq('family_id', id)
-      .order('created_at', { ascending: false })
-      .limit(MESSAGE_LIMIT),
-  ])
+  const [family, members, events, tasks, points, rewards, messages, comments] =
+    await Promise.all([
+      supabase.from('family').select('*').eq('id', id).single(),
+      supabase.from('member').select('*').eq('family_id', id).order('created_at'),
+      supabase.from('event').select('*').eq('family_id', id),
+      supabase.from('task').select('*').eq('family_id', id),
+      supabase.from('point_entry').select('*').eq('family_id', id),
+      supabase.from('reward').select('*').eq('family_id', id),
+      supabase
+        .from('message')
+        .select('*')
+        .eq('family_id', id)
+        .order('created_at', { ascending: false })
+        .limit(MESSAGE_LIMIT),
+      supabase.from('comment').select('*').eq('family_id', id).order('created_at'),
+    ])
 
   const failed = [family, members, events, tasks, points, rewards].find((r) => r.error)
   if (failed?.error) throw failed.error
 
-  // 대화방 테이블만 없어도 앱 전체가 멈추면 안 됩니다.
-  if (messages.error) {
-    console.warn('대화방을 읽지 못했습니다 (schema.sql 을 다시 실행했나요?)', messages.error)
-  }
+  // 나중에 추가된 테이블(대화, 댓글)은 없어도 앱 전체가 멈추면 안 됩니다.
+  // schema.sql 을 다시 실행하기 전까지 그 기능만 '준비 중'으로 둡니다.
+  if (messages.error) console.warn('대화방을 읽지 못했습니다', messages.error)
+  if (comments.error) console.warn('댓글을 읽지 못했습니다', comments.error)
   chatReady = !messages.error
+  commentsReady = !comments.error
 
   setState({
     family: { id: family.data!.id, name: family.data!.name },
@@ -299,6 +334,7 @@ async function loadAll(id: string): Promise<void> {
     points: (points.data ?? []).map(toPoint),
     rewards: (rewards.data ?? []).map(toReward),
     messages: (messages.data ?? []).map(toMessage).reverse(),
+    comments: (comments.data ?? []).map(toComment),
   })
 }
 
@@ -355,6 +391,7 @@ function watch(id: string) {
   const tables = ['family', 'member', 'event', 'task', 'point_entry', 'reward']
   // 없는 테이블을 구독하면 채널 전체가 실패하므로 있을 때만 넣습니다.
   if (chatReady) tables.push('message')
+  if (commentsReady) tables.push('comment')
   for (const table of tables) {
     channel.on(
       'postgres_changes',
@@ -484,8 +521,14 @@ export function updateEvent(id: string, changes: Partial<FamilyEvent>) {
 }
 
 export function removeEvent(id: string) {
-  write({ ...state, events: state.events.filter((e) => e.id !== id) }, () =>
-    supabase.from('event').delete().eq('id', id),
+  // 댓글은 DB 의 cascade 가 함께 지우므로 화면만 맞춥니다.
+  write(
+    {
+      ...state,
+      events: state.events.filter((e) => e.id !== id),
+      comments: state.comments.filter((c) => c.eventId !== id),
+    },
+    () => supabase.from('event').delete().eq('id', id),
   )
 }
 
@@ -507,8 +550,13 @@ export function updateTask(id: string, changes: Partial<Task>) {
 }
 
 export function removeTask(id: string) {
-  write({ ...state, tasks: state.tasks.filter((t) => t.id !== id) }, () =>
-    supabase.from('task').delete().eq('id', id),
+  write(
+    {
+      ...state,
+      tasks: state.tasks.filter((t) => t.id !== id),
+      comments: state.comments.filter((c) => c.taskId !== id),
+    },
+    () => supabase.from('task').delete().eq('id', id),
   )
 }
 
@@ -660,6 +708,68 @@ export function removeMessage(id: string) {
   )
 }
 
+// ── 댓글 ──────────────────────────────────────────────────────
+
+export function addComment(input: {
+  eventId?: string
+  taskId?: string
+  authorId: string
+  body: string
+}) {
+  const text = input.body.trim()
+  if (!text) return null
+  const comment: Comment = {
+    id: newId(),
+    familyId,
+    eventId: input.eventId ?? null,
+    taskId: input.taskId ?? null,
+    authorId: input.authorId,
+    body: text.slice(0, 1000),
+    createdAt: new Date().toISOString(),
+  }
+  write({ ...state, comments: [...state.comments, comment] }, () =>
+    supabase.from('comment').insert(fromComment(comment)),
+  )
+  return comment
+}
+
+export function removeComment(id: string) {
+  write({ ...state, comments: state.comments.filter((c) => c.id !== id) }, () =>
+    supabase.from('comment').delete().eq('id', id),
+  )
+}
+
+// ── 푸시 알림 구독 ────────────────────────────────────────────
+// 화면에 그리는 데이터가 아니라 메모리 상태에는 두지 않고 서버에만 씁니다.
+
+export interface PushKeys {
+  endpoint: string
+  p256dh: string
+  auth: string
+}
+
+/** 이 기기의 구독을 저장합니다. 같은 기기면 덮어씁니다. 실패하면 원인 문구를 돌려줍니다. */
+export async function savePushSubscription(
+  memberId: string,
+  keys: PushKeys,
+): Promise<string | null> {
+  const { error } = await supabase.from('push_subscription').upsert(
+    {
+      family_id: familyId,
+      member_id: memberId,
+      endpoint: keys.endpoint,
+      p256dh: keys.p256dh,
+      auth: keys.auth,
+    },
+    { onConflict: 'endpoint' },
+  )
+  return error ? describe(error) : null
+}
+
+export async function deletePushSubscription(endpoint: string): Promise<void> {
+  await supabase.from('push_subscription').delete().eq('endpoint', endpoint)
+}
+
 // ── 백업 ──────────────────────────────────────────────────────
 // 이제 내용은 Supabase 에 있지만, 통째로 받아 둘 수 있는 길은 남겨 둡니다.
 
@@ -691,6 +801,9 @@ export async function importJson(json: string): Promise<void> {
   await supabase.from('reward').insert(withFamily(parsed.rewards ?? []).map(fromReward))
   if (parsed.messages?.length) {
     await supabase.from('message').insert(withFamily(parsed.messages).map(fromMessage))
+  }
+  if (parsed.comments?.length) {
+    await supabase.from('comment').insert(withFamily(parsed.comments).map(fromComment))
   }
 
   await supabase.from('family').update({ name: parsed.family.name }).eq('id', familyId)

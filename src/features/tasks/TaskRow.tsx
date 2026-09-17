@@ -3,6 +3,7 @@ import { confirmTask, updateTask, useDb } from '../../lib/db'
 import { dueLabel, isOverdue } from '../../lib/date'
 import { canConfirmTask, canCreateTask, canToggleTask } from '../../lib/permissions'
 import { useMe } from '../auth'
+import CommentButton from '../comments/CommentButton'
 import type { Task } from '../../types'
 
 interface Props {
@@ -83,6 +84,7 @@ export default function TaskRow({ task, onEdit }: Props) {
         {task.status === 'done' && !canConfirm && (
           <span className="px-2 text-xs font-semibold text-muted">확인 기다리는 중</span>
         )}
+        <CommentButton title={task.title} target={{ taskId: task.id }} />
         {canCreateTask(me) && (
           <button
             type="button"

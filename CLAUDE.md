@@ -18,6 +18,8 @@
 | **숙제 관리** | 아이별 숙제 등록, 마감일, 제출/확인 상태. 부모가 확인 처리. 학원 숙제 사진에서 글자를 읽어 한 번에 등록 |
 | **칭찬 / 벌점** | 잘한 일은 +점, 규칙 위반은 -점. 아이별 누적 포인트와 이력 |
 | **대화** | 가족 대화방 하나. 아이 폰에 카톡이 없어서 이 앱이 유일한 연락 수단 |
+| **댓글** | 일정·할일·숙제 항목마다 짧은 댓글. "이거 모르겠어요", "확인했어" |
+| **알림** | 앱을 닫아 둔 폰에도 새 대화·댓글을 푸시. 설정에서 기기마다 켬 (`supabase/PUSH.md`) |
 
 ### 설계 의도 (중요)
 
@@ -67,7 +69,7 @@ PIN 을 다시 받습니다.** 아이가 부모 폰을 집어들어도 부모 �
 
 ## 3. 데이터 모델
 
-테이블 7개면 충분합니다. 필요해지기 전에 늘리지 마세요.
+테이블 9개면 충분합니다. 필요해지기 전에 늘리지 마세요.
 
 ```
 family          가족 (한 행만 존재)
@@ -94,6 +96,12 @@ reward          포인트로 바꾸는 보상
 
 message         가족 대화방 메시지 (방은 가족당 하나라 방 테이블은 없음)
   id, family_id, sender_id, body, created_at
+
+comment         일정 또는 할일 한 항목의 댓글 (event_id/task_id 중 하나만, 원본 지우면 cascade)
+  id, family_id, event_id, task_id, author_id, body, created_at
+
+push_subscription  알림을 켠 기기. 화면에는 안 나옴. Edge Function 만 읽음
+  id, family_id, member_id, endpoint(unique), p256dh, auth, created_at
 ```
 
 ### 규칙
@@ -103,7 +111,9 @@ message         가족 대화방 메시지 (방은 가족당 하나라 방 테�
 - **삭제는 하드 삭제.** 가족 앱에 감사 로그는 과합니다. 단, `point_entry`만은 지우지 말고 취소용 반대 부호 항목을 추가하세요 (아이와 분쟁이 생겼을 때 기록이 남아야 함).
 - **숙제를 완료하면 자동으로 포인트가 붙지 않습니다.** 부모가 `confirmed`로 바꿀 때 `reward_points`만큼 `point_entry`가 생깁니다.
 - **사진은 어디에도 저장하지 않습니다.** 숙제 사진은 글자만 뽑아내고 버립니다. 테이블에 이미지 컬럼을 추가하지 마세요 (아래 참고).
-- **대화는 최근 200개만 읽습니다.** 쌓이기만 하는 유일한 테이블이라 전체 다시 읽기 규칙의 예외입니다. '어디까지 읽었나'는 기기(localStorage)에만 두고 서버에 읽음 테이블을 만들지 마세요. `message` 테이블이 없으면(schema.sql 재실행 전) 대화 탭만 '준비 중'으로 보이고 나머지는 그대로 돕니다.
+- **대화는 최근 200개만 읽습니다.** 쌓이기만 하는 유일한 테이블이라 전체 다시 읽기 규칙의 예외입니다. '어디까지 읽었나'는 기기(localStorage)에만 두고 서버에 읽음 테이블을 만들지 마세요.
+- **나중에 추가된 테이블(`message`, `comment`)은 없어도 앱이 뜹니다.** schema.sql 재실행 전이면 그 기능만 '준비 중'/숨김이고 나머지는 그대로 돕니다. 새 테이블을 또 추가하면 같은 방식으로 `loadAll` 에서 실패를 흡수하세요.
+- **푸시 알림은 서버 쪽 조각이 따로 있습니다.** `supabase/functions/notify`(Edge Function, Deno) 가 `message`/`comment` INSERT 웹훅을 받아 웹 푸시를 보냅니다. 브라우저 쪽은 `lib/push.ts` + `public/sw.js`. 서비스 워커는 **캐시를 하지 않습니다** — 배포 후 옛 화면이 남는 문제를 만들지 마세요. VAPID 키는 바꾸면 모든 구독이 무효가 됩니다.
 
 ## 4. 권한
 
@@ -121,6 +131,9 @@ message         가족 대화방 메시지 (방은 가족당 하나라 방 테�
 | 구성원 관리 | O | X |
 | 대화 보내기 | O | O |
 | 메시지 지우기 | O | X |
+| 댓글 남기기 | O | O |
+| 댓글 지우기 | O | 자기 것만 |
+| 알림 켜기/끄기 | 기기마다 | 기기마다 |
 
 규칙은 `src/lib/permissions.ts` 한 곳에 모여 있습니다. 버튼을 숨길 때도, 실제로
 데이터를 바꾸기 직전에도 같은 함수를 쓰세요.
@@ -155,6 +168,8 @@ src/
                   + ImportFromPhoto — 사진에서 숙제 가져오기
     points/       칭찬·벌점 주기
     chat/         대화방 (MessageList / Composer / unread — 안 읽은 개수는 기기에만)
+    comments/     항목 댓글 (CommentButton 이 줄 끝에 붙고 CommentsModal 을 엽니다)
+    push/         설정의 알림 켜기/끄기 칸
     members/      구성원 폼
   lib/
     supabase.ts   서버 연결 (.env.local 을 읽습니다)
@@ -162,11 +177,17 @@ src/
     date.ts       Asia/Seoul 기준 날짜 계산
     permissions.ts 누가 무엇을 할 수 있는지
     ocr.ts        사진에서 글자 읽기 (tesseract.js)
+    push.ts       푸시 알림 구독 (서비스 워커 등록, 켜기/끄기)
     seed.ts       새 가족에게 만들어 주는 구성원·보상
   types/          공용 타입 정의
 
+public/
+  sw.js           알림 전용 서비스 워커 (캐시 없음)
+
 supabase/
   schema.sql      테이블 + RLS + Realtime. SQL Editor 에 붙여넣어 실행합니다
+  PUSH.md         푸시 알림 서버 쪽 설정 방법
+  functions/notify/  새 대화·댓글을 푸시로 보내는 Edge Function (Deno, 린트 제외)
 ```
 
 - 도메인 로직은 `features/` 안에, 화면 조립만 `pages/`에서 합니다.

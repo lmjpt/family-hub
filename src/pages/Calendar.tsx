@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import EmptyState from '../components/EmptyState'
+import CommentButton from '../features/comments/CommentButton'
 import EventForm from '../features/events/EventForm'
 import { useMe } from '../features/auth'
 import { useDb } from '../lib/db'
@@ -197,11 +198,11 @@ export default function Calendar() {
             {selectedEvents.map((event) => {
               const owner = db.members.find((m) => m.id === event.ownerId)
               return (
-                <li key={event.id}>
+                <li key={event.id} className="card flex items-center gap-1 pr-2">
                   <button
                     type="button"
                     onClick={() => openEdit(event)}
-                    className="card flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-cream"
+                    className="flex min-w-0 flex-1 items-center gap-3 rounded-l-[1.25rem] px-4 py-3 text-left hover:bg-cream"
                   >
                     <span
                       className="h-10 w-1.5 shrink-0 rounded-full"
@@ -220,6 +221,7 @@ export default function Calendar() {
                       </span>
                     </span>
                   </button>
+                  <CommentButton title={event.title} target={{ eventId: event.id }} />
                 </li>
               )
             })}
@@ -241,6 +243,7 @@ export default function Calendar() {
                       {who ? ` · ${who.avatarEmoji} ${who.name}` : ''}
                     </span>
                   </span>
+                  <CommentButton title={task.title} target={{ taskId: task.id }} />
                 </li>
               )
             })}

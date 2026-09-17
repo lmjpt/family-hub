@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import Avatar from '../components/Avatar'
 import MemberForm from '../features/members/MemberForm'
+import NotificationSettings from '../features/push/NotificationSettings'
 import { useSession } from '../features/auth'
 import { useFamilyAuth } from '../features/familyAuth'
 import {
@@ -58,6 +59,9 @@ export default function Settings() {
   return (
     <div className="space-y-6">
       <h2 className="text-lg font-bold">설정</h2>
+
+      {/* 알림 — 기기마다 따로 켭니다. 아이 폰에서도 아이가 직접 켤 수 있게 맨 위에. */}
+      <NotificationSettings />
 
       {/* 가족 이름 */}
       <section className="space-y-2">

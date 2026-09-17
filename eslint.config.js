@@ -4,7 +4,8 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  { ignores: ['dist'] },
+  // supabase/functions 는 Deno 에서 도는 서버 코드라 브라우저 규칙으로 검사하지 않습니다.
+  { ignores: ['dist', 'supabase/functions'] },
   {
     files: ['**/*.{ts,tsx}'],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
