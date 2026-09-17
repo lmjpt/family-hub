@@ -82,6 +82,36 @@ async function memberName(id: string): Promise<string> {
   return data?.name ?? '가족'
 }
 
+const TZ = 'Asia/Seoul'
+const dueFmt = new Intl.DateTimeFormat('ko-KR', {
+  timeZone: TZ, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+})
+/** '9월 18일 21:00까지' */
+function dueLabel(iso: string | null): string {
+  if (!iso) return ''
+  const p = Object.fromEntries(dueFmt.formatToParts(new Date(iso)).map((x) => [x.type, x.value]))
+  return ` · ${p.month}월 ${p.day}일 ${p.hour}:${p.minute}까지`
+}
+
+/**
+ * 할일·숙제가 새로 배정됐을 때 (새로 만들었거나 담당자를 바꿨을 때) → 그 담당자에게.
+ * 사진에서 여러 개를 한 번에 넣으면 알림도 여러 개 오므로, 같은 tag 로 묶어 마지막 것만 남깁니다.
+ */
+async function assignedNotice(id: string): Promise<Notice | null> {
+  const { data: t } = await supabase.from('task').select('*').eq('id', id).maybeSingle()
+  if (!t || !t.assignee_id) return null
+  const kind = t.kind === 'homework' ? '숙제' : '할일'
+  return {
+    familyId: t.family_id,
+    skipMemberIds: [],
+    onlyMemberIds: [t.assignee_id],
+    title: `새 ${kind}가 왔어요`,
+    body: `${clip(t.title)}${dueLabel(t.due_at)}`,
+    url: t.kind === 'homework' ? './#/homework' : './#/tasks',
+    tag: `assigned-${t.assignee_id}`,
+  }
+}
+
 /**
  * 할일·숙제의 상태가 바뀌었을 때.
  *   todo → done      아이가 다 했다고 체크 → 부모들에게 "확인해 주세요"
@@ -135,8 +165,17 @@ async function buildNotice(payload: WebhookPayload): Promise<Notice | null> {
   const id = String(payload.record.id ?? '')
   if (!id) return null
 
-  if (payload.table === 'task' && payload.type === 'UPDATE') {
-    return taskNotice(id, payload.old_record?.status)
+  if (payload.table === 'task') {
+    if (payload.type === 'INSERT') return assignedNotice(id)
+    if (payload.type === 'UPDATE') {
+      // 담당자가 바뀌었으면 새 담당자에게, 아니면 상태 변화로 봅니다.
+      const oldAssignee = payload.old_record?.assignee_id ?? null
+      if (payload.record.assignee_id && payload.record.assignee_id !== oldAssignee) {
+        return assignedNotice(id)
+      }
+      return taskNotice(id, payload.old_record?.status)
+    }
+    return null
   }
   if (payload.type !== 'INSERT') return null
 
