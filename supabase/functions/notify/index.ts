@@ -26,9 +26,38 @@ webpush.setVapidDetails(
 )
 
 interface WebhookPayload {
-  type: 'INSERT' | 'UPDATE' | 'DELETE'
-  table: string
-  record: Record<string, unknown> | null
+  /** 'TEST' 는 앱의 설정 → '테스트 알림 보내기' 가 보내는 것. 그 기기 하나에만 보냅니다. */
+  type: 'INSERT' | 'UPDATE' | 'DELETE' | 'TEST'
+  table?: string
+  record?: Record<string, unknown> | null
+  /** TEST 일 때: 보낼 기기의 구독 endpoint */
+  endpoint?: string
+}
+
+interface Subscription {
+  endpoint: string
+  p256dh: string
+  auth: string
+}
+
+/** 한 기기로 보냅니다. 실패하면 사람이 읽을 원인 문구를 돌려줍니다. */
+async function sendTo(sub: Subscription, message: string): Promise<string | null> {
+  try {
+    await webpush.sendNotification(
+      { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+      message,
+      { TTL: 60 * 60 * 24 },
+    )
+    return null
+  } catch (err) {
+    const e = err as { statusCode?: number; body?: string; message?: string }
+    // 404/410 = 그 기기가 알림을 꺼서 더는 유효하지 않은 구독. 정리합니다.
+    if (e.statusCode === 404 || e.statusCode === 410) {
+      await supabase.from('push_subscription').delete().eq('endpoint', sub.endpoint)
+      return `구독이 만료되어 지웠습니다 (${e.statusCode})`
+    }
+    return `[${e.statusCode ?? '?'}] ${e.message ?? ''} ${e.body ?? ''}`.trim()
+  }
 }
 
 interface Notice {
@@ -104,12 +133,46 @@ async function buildNotice(payload: WebhookPayload): Promise<Notice | null> {
   return null
 }
 
+// 앱(브라우저)에서 테스트 알림을 요청할 때 필요한 CORS 응답. 트리거(서버→서버)에는 무관합니다.
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
+  const res = await handle(req)
+  for (const [k, v] of Object.entries(CORS)) res.headers.set(k, v)
+  return res
+})
+
+async function handle(req: Request): Promise<Response> {
   let payload: WebhookPayload
   try {
     payload = await req.json()
   } catch {
     return Response.json({ error: 'JSON 이 아닙니다' }, { status: 400 })
+  }
+
+  // 테스트: 앱에서 누른 기기 한 대에만 보내고, 결과를 그대로 돌려줍니다.
+  if (payload.type === 'TEST') {
+    if (!payload.endpoint) return Response.json({ error: 'endpoint 가 없습니다' }, { status: 400 })
+    const { data: sub } = await supabase
+      .from('push_subscription')
+      .select('endpoint, p256dh, auth')
+      .eq('endpoint', payload.endpoint)
+      .maybeSingle()
+    if (!sub) {
+      return Response.json({ sent: 0, errors: ['이 기기의 구독이 서버에 없습니다. 알림을 끄고 다시 켜 보세요.'] })
+    }
+    const err = await sendTo(sub, JSON.stringify({
+      title: '우리집 테스트 알림',
+      body: '이 알림이 보이면 준비가 다 된 거예요 🎉',
+      url: './#/settings',
+      tag: 'test',
+    }))
+    return Response.json({ sent: err ? 0 : 1, errors: err ? [err] : [] })
   }
 
   const notice = await buildNotice(payload)
@@ -129,29 +192,10 @@ Deno.serve(async (req) => {
     tag: notice.tag,
   })
 
-  let sent = 0
-  let removed = 0
-  await Promise.all(
-    (subs ?? []).map(async (s) => {
-      try {
-        await webpush.sendNotification(
-          { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-          message,
-          { TTL: 60 * 60 * 24 },
-        )
-        sent += 1
-      } catch (err) {
-        const status = (err as { statusCode?: number }).statusCode
-        // 404/410 = 그 기기가 알림을 꺼서 더는 유효하지 않은 구독. 정리합니다.
-        if (status === 404 || status === 410) {
-          await supabase.from('push_subscription').delete().eq('endpoint', s.endpoint)
-          removed += 1
-        } else {
-          console.error('푸시 실패', status, (err as Error).message)
-        }
-      }
-    }),
-  )
+  const results = await Promise.all((subs ?? []).map((s) => sendTo(s, message)))
+  const errors = results.filter((r): r is string => r !== null)
+  if (errors.length) console.error('푸시 실패', errors)
 
-  return Response.json({ sent, removed })
-})
+  // 트리거 쪽 기록(net._http_response)에도 이 JSON 이 남아 나중에 원인을 볼 수 있습니다.
+  return Response.json({ sent: results.length - errors.length, errors })
+}

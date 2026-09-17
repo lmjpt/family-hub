@@ -38,6 +38,41 @@ export function needsHomeScreenInstall(): boolean {
   return ios && !standalone
 }
 
+/**
+ * 알림을 보내는 Edge Function 주소. 저장소 폴더는 functions/notify 지만, 실제로 배포된
+ * 함수 이름은 대시보드 편집기가 붙인 'smooth-handler' 입니다 (supabase/PUSH.md 참고).
+ */
+const NOTIFY_FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/smooth-handler`
+
+/**
+ * 이 기기 한 대에 테스트 알림을 보내 달라고 서버에 요청합니다.
+ * 성공/실패 원인을 사람이 읽을 문구로 돌려줍니다. 알림이 안 올 때 어디가 문제인지
+ * 폰 화면에서 바로 보려는 것입니다.
+ */
+export async function sendTestPush(): Promise<string> {
+  const sub = await currentSubscription()
+  if (!sub) return '이 기기는 아직 알림이 켜져 있지 않아요.'
+  try {
+    const res = await fetch(NOTIFY_FUNCTION_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY ?? '',
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY ?? ''}`,
+      },
+      body: JSON.stringify({ type: 'TEST', endpoint: sub.endpoint }),
+    })
+    const text = await res.text()
+    if (!res.ok) return `서버 응답 ${res.status}: ${text.slice(0, 200)}`
+    const json = JSON.parse(text) as { sent?: number; errors?: string[]; error?: string }
+    if (json.error) return `서버 오류: ${json.error}`
+    if (json.sent && json.sent > 0) return '테스트 알림을 보냈어요. 잠시 뒤 알림이 뜨는지 봐 주세요.'
+    return `보내지 못했어요: ${(json.errors ?? []).join(' / ') || '원인 없음'}`
+  } catch (err) {
+    return `요청 실패: ${err instanceof Error ? err.message : String(err)}`
+  }
+}
+
 /** 앱을 켤 때마다 불러도 됩니다. 이미 등록돼 있으면 그대로 돌려줍니다. */
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (!('serviceWorker' in navigator)) return null

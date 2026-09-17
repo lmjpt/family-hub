@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { disablePush, enablePush, getPushState } from '../../lib/push'
+import { disablePush, enablePush, getPushState, sendTestPush } from '../../lib/push'
 import type { PushState } from '../../lib/push'
 import { useMe } from '../auth'
 
@@ -8,6 +8,18 @@ export default function NotificationSettings() {
   const me = useMe()
   const [state, setState] = useState<PushState | 'busy'>('busy')
   const [error, setError] = useState('')
+  const [testResult, setTestResult] = useState('')
+  const [testing, setTesting] = useState(false)
+
+  async function test() {
+    setTesting(true)
+    setTestResult('보내는 중…')
+    try {
+      setTestResult(await sendTestPush())
+    } finally {
+      setTesting(false)
+    }
+  }
 
   useEffect(() => {
     void getPushState().then(setState)
@@ -67,6 +79,21 @@ export default function NotificationSettings() {
           {state === 'on' ? '켜짐' : state === 'busy' ? '…' : '켜기'}
         </button>
       </div>
+
+      {/* 알림이 안 올 때 어디가 문제인지 폰에서 바로 보는 길 */}
+      {state === 'on' && (
+        <div className="flex flex-wrap items-center gap-3 px-1">
+          <button
+            type="button"
+            onClick={() => void test()}
+            disabled={testing}
+            className="text-sm font-semibold text-muted underline underline-offset-4"
+          >
+            이 기기로 테스트 알림 보내기
+          </button>
+          {testResult && <span className="text-sm break-words text-muted">{testResult}</span>}
+        </div>
+      )}
     </section>
   )
 }
