@@ -6,9 +6,11 @@ import { useMe } from '../features/auth'
 import { useDb } from '../lib/db'
 import {
   WEEKDAYS,
+  addDays,
   dayKey,
   formatDayLabel,
   formatMonthLabel,
+  formatShort,
   formatTime,
   monthGrid,
   shiftMonth,
@@ -16,6 +18,37 @@ import {
 } from '../lib/date'
 import { canCreateEvent } from '../lib/permissions'
 import type { FamilyEvent } from '../types'
+
+/**
+ * 일정이 걸쳐 있는 날짜 키들 (시작일 ~ 끝나는 날, 포함).
+ * 끝이 정확히 다음 날 0시면 그 날은 빼줍니다 — "금 18:00 ~ 토 00:00" 은 금요일 일정입니다.
+ * 잘못 입력해 몇 달짜리가 되어도 달력이 무거워지지 않게 60일에서 끊습니다.
+ */
+function eventDays(e: FamilyEvent): string[] {
+  const start = dayKey(e.startsAt)
+  let end = dayKey(e.endsAt)
+  if (end > start && formatTime(e.endsAt) === '00:00') end = addDays(end, -1)
+  const days = [start]
+  let cur = start
+  while (cur < end && days.length < 60) {
+    cur = addDays(cur, 1)
+    days.push(cur)
+  }
+  return days
+}
+
+/** 목록에 보일 시간 표기. 하루 안이면 '10:00 – 11:00', 여러 날이면 날짜까지. */
+function eventWhen(e: FamilyEvent): string {
+  const multiDay = dayKey(e.startsAt) !== dayKey(e.endsAt)
+  if (e.allDay) {
+    return multiDay
+      ? `${formatDayLabel(dayKey(e.startsAt))} ~ ${formatDayLabel(dayKey(e.endsAt))} 하루 종일`
+      : '하루 종일'
+  }
+  return multiDay
+    ? `${formatShort(e.startsAt)} ~ ${formatShort(e.endsAt)}`
+    : `${formatTime(e.startsAt)} – ${formatTime(e.endsAt)}`
+}
 
 export default function Calendar() {
   const db = useDb()
@@ -35,14 +68,18 @@ export default function Calendar() {
     [cursor.year, cursor.month],
   )
 
-  /** 날짜별로 일정을 미리 묶어 둡니다. 42칸을 돌면서 매번 필터링하지 않기 위해. */
+  /**
+   * 날짜별로 일정을 미리 묶어 둡니다. 42칸을 돌면서 매번 필터링하지 않기 위해.
+   * 금~토처럼 여러 날에 걸친 일정은 그 사이 모든 날에 들어갑니다.
+   */
   const eventsByDay = useMemo(() => {
     const map = new Map<string, FamilyEvent[]>()
     for (const e of db.events) {
-      const key = dayKey(e.startsAt)
-      const list = map.get(key)
-      if (list) list.push(e)
-      else map.set(key, [e])
+      for (const key of eventDays(e)) {
+        const list = map.get(key)
+        if (list) list.push(e)
+        else map.set(key, [e])
+      }
     }
     for (const list of map.values()) {
       list.sort((a, b) => a.startsAt.localeCompare(b.startsAt))
@@ -86,6 +123,80 @@ export default function Calendar() {
 
   return (
     <div className="space-y-4">
+      {/* 고른 날의 일정·마감. 앱을 열면 오늘 것이 바로 보여야 해서 달력보다 위에 둡니다. */}
+      <section className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold">
+            {selected === today ? '오늘 · ' : ''}
+            {formatDayLabel(selected)}
+          </h3>
+          {canCreateEvent(me) && (
+            <button type="button" onClick={openNew} className="btn btn-primary py-2">
+              + 일정
+            </button>
+          )}
+        </div>
+
+        {selectedEvents.length === 0 && selectedTasks.length === 0 ? (
+          <div className="card">
+            <EmptyState emoji="🗓️" title="이 날은 비어 있어요" />
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {selectedEvents.map((event) => {
+              const owner = db.members.find((m) => m.id === event.ownerId)
+              return (
+                <li key={event.id} className="card flex items-center gap-1 pr-2">
+                  <button
+                    type="button"
+                    onClick={() => openEdit(event)}
+                    className="flex min-w-0 flex-1 items-center gap-3 rounded-l-[1.25rem] px-4 py-3 text-left hover:bg-cream"
+                  >
+                    <span
+                      className="h-10 w-1.5 shrink-0 rounded-full"
+                      style={{ background: memberColor(event.ownerId) }}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-semibold">
+                        {event.title}
+                      </span>
+                      <span className="block text-sm text-muted">
+                        {eventWhen(event)}
+                        {' · '}
+                        {owner ? `${owner.avatarEmoji} ${owner.name}` : '가족 전체'}
+                      </span>
+                    </span>
+                  </button>
+                  <CommentButton title={event.title} target={{ eventId: event.id }} />
+                </li>
+              )
+            })}
+
+            {selectedTasks.map((task) => {
+              const who = db.members.find((m) => m.id === task.assigneeId)
+              return (
+                <li
+                  key={task.id}
+                  className="card flex items-center gap-3 px-4 py-3 opacity-90"
+                >
+                  <span className="text-xl" aria-hidden="true">
+                    {task.kind === 'homework' ? '📚' : '🧹'}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold">{task.title}</span>
+                    <span className="block text-sm text-muted">
+                      마감 {formatTime(task.dueAt!)}
+                      {who ? ` · ${who.avatarEmoji} ${who.name}` : ''}
+                    </span>
+                  </span>
+                  <CommentButton title={task.title} target={{ taskId: task.id }} />
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </section>
+
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1">
           <button
@@ -178,78 +289,6 @@ export default function Calendar() {
           })}
         </div>
       </div>
-
-      <section className="space-y-2">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold">{formatDayLabel(selected)}</h3>
-          {canCreateEvent(me) && (
-            <button type="button" onClick={openNew} className="btn btn-primary py-2">
-              + 일정
-            </button>
-          )}
-        </div>
-
-        {selectedEvents.length === 0 && selectedTasks.length === 0 ? (
-          <div className="card">
-            <EmptyState emoji="🗓️" title="이 날은 비어 있어요" />
-          </div>
-        ) : (
-          <ul className="space-y-2">
-            {selectedEvents.map((event) => {
-              const owner = db.members.find((m) => m.id === event.ownerId)
-              return (
-                <li key={event.id} className="card flex items-center gap-1 pr-2">
-                  <button
-                    type="button"
-                    onClick={() => openEdit(event)}
-                    className="flex min-w-0 flex-1 items-center gap-3 rounded-l-[1.25rem] px-4 py-3 text-left hover:bg-cream"
-                  >
-                    <span
-                      className="h-10 w-1.5 shrink-0 rounded-full"
-                      style={{ background: memberColor(event.ownerId) }}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-semibold">
-                        {event.title}
-                      </span>
-                      <span className="block text-sm text-muted">
-                        {event.allDay
-                          ? '하루 종일'
-                          : `${formatTime(event.startsAt)} – ${formatTime(event.endsAt)}`}
-                        {' · '}
-                        {owner ? `${owner.avatarEmoji} ${owner.name}` : '가족 전체'}
-                      </span>
-                    </span>
-                  </button>
-                  <CommentButton title={event.title} target={{ eventId: event.id }} />
-                </li>
-              )
-            })}
-
-            {selectedTasks.map((task) => {
-              const who = db.members.find((m) => m.id === task.assigneeId)
-              return (
-                <li
-                  key={task.id}
-                  className="card flex items-center gap-3 px-4 py-3 opacity-90"
-                >
-                  <span className="text-xl" aria-hidden="true">
-                    {task.kind === 'homework' ? '📚' : '🧹'}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold">{task.title}</span>
-                    <span className="block text-sm text-muted">
-                      마감 {formatTime(task.dueAt!)}
-                      {who ? ` · ${who.avatarEmoji} ${who.name}` : ''}
-                    </span>
-                  </span>
-                  <CommentButton title={task.title} target={{ taskId: task.id }} />
-                </li>
-              )
-            })}
-          </ul>
-        )}
-      </section>
 
       <EventForm
         open={formOpen}
