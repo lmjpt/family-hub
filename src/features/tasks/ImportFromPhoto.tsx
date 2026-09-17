@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
+import DateTimeField from '../../components/DateTimeField'
 import Modal from '../../components/Modal'
 import { addTask, useDb } from '../../lib/db'
 import {
@@ -306,13 +307,7 @@ export default function ImportFromPhoto({ open, onClose }: Props) {
               <label className="label" htmlFor="ocr-due">
                 {hasLineDue ? '마감 (날짜가 없는 줄만)' : '마감'}
               </label>
-              <input
-                id="ocr-due"
-                type="datetime-local"
-                className="field"
-                value={due}
-                onChange={(e) => setDue(e.target.value)}
-              />
+              <DateTimeField id="ocr-due" value={due} onChange={setDue} />
             </div>
             <div>
               <label className="label" htmlFor="ocr-points">

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import DateTimeField from '../../components/DateTimeField'
 import Modal from '../../components/Modal'
 import { addEvent, removeEvent, updateEvent, useDb } from '../../lib/db'
 import { dayKeyToIso, isoToSeoulInput, seoulInputToIso } from '../../lib/date'
@@ -131,25 +132,13 @@ export default function EventForm({ open, event, defaultDay, onClose }: Props) {
             <label className="label" htmlFor="event-start">
               시작
             </label>
-            <input
-              id="event-start"
-              type="datetime-local"
-              className="field"
-              value={start}
-              onChange={(e) => setStart(e.target.value)}
-            />
+            <DateTimeField id="event-start" value={start} onChange={setStart} />
           </div>
           <div>
             <label className="label" htmlFor="event-end">
               끝
             </label>
-            <input
-              id="event-end"
-              type="datetime-local"
-              className="field"
-              value={end}
-              onChange={(e) => setEnd(e.target.value)}
-            />
+            <DateTimeField id="event-end" value={end} onChange={setEnd} />
           </div>
         </div>
 

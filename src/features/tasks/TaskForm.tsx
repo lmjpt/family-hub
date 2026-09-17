@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import DateTimeField from '../../components/DateTimeField'
 import Modal from '../../components/Modal'
 import { addTask, removeTask, updateTask, useDb } from '../../lib/db'
 import { dayKeyToIso, isoToSeoulInput, seoulInputToIso, todayKey } from '../../lib/date'
@@ -162,14 +163,7 @@ export default function TaskForm({ open, kind, task, onClose }: Props) {
             />
             <span className="font-semibold">마감 정하기</span>
           </label>
-          {hasDue && (
-            <input
-              type="datetime-local"
-              className="field mt-2"
-              value={due}
-              onChange={(e) => setDue(e.target.value)}
-            />
-          )}
+          {hasDue && <DateTimeField className="mt-2" value={due} onChange={setDue} />}
         </div>
 
         <div>
