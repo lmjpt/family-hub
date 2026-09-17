@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import Avatar from '../components/Avatar'
 import MemberForm from '../features/members/MemberForm'
 import NotificationSettings from '../features/push/NotificationSettings'
+import WidgetLink from '../features/widget/WidgetLink'
 import { useSession } from '../features/auth'
 import { useFamilyAuth } from '../features/familyAuth'
 import {
@@ -62,6 +63,9 @@ export default function Settings() {
 
       {/* 알림 — 기기마다 따로 켭니다. 아이 폰에서도 아이가 직접 켤 수 있게 맨 위에. */}
       <NotificationSettings />
+
+      {/* 안드로이드 폰에서만 보입니다 */}
+      <WidgetLink />
 
       {/* 가족 이름 */}
       <section className="space-y-2">

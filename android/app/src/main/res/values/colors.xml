@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 웹의 index.css 색과 같습니다 -->
+    <color name="cream">#FDF6EC</color>
+    <color name="paper">#FFFFFF</color>
+    <color name="ink">#3A332C</color>
+    <color name="muted">#8D8177</color>
+    <color name="line">#EFE5D7</color>
+    <color name="brand">#E8795A</color>
+</resources>

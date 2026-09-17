@@ -20,6 +20,7 @@
 | **대화** | 가족 대화방 하나. 아이 폰에 카톡이 없어서 이 앱이 유일한 연락 수단 |
 | **댓글** | 일정·할일·숙제 항목마다 짧은 댓글. "이거 모르겠어요", "확인했어" |
 | **알림** | 앱을 닫아 둔 폰에도 새 대화·댓글을 푸시. 설정에서 기기마다 켬 (`supabase/PUSH.md`) |
+| **안드로이드 앱 + 위젯** | 웹을 그대로 띄우는 껍데기(TWA) + 바탕화면 위젯(오늘 일정·마감). `android/README.md` |
 
 ### 설계 의도 (중요)
 
@@ -69,7 +70,7 @@ PIN 을 다시 받습니다.** 아이가 부모 폰을 집어들어도 부모 �
 
 ## 3. 데이터 모델
 
-테이블 10개면 충분합니다. 필요해지기 전에 늘리지 마세요.
+테이블 11개면 충분합니다. 필요해지기 전에 늘리지 마세요.
 
 ```
 family          가족 (한 행만 존재)
@@ -105,6 +106,9 @@ comment         일정 또는 할일 한 항목의 댓글 (event_id/task_id 중 
 
 push_subscription  알림을 켠 기기. 화면에는 안 나옴. Edge Function 만 읽음
   id, family_id, member_id, endpoint(unique), p256dh, auth, created_at
+
+widget_token    안드로이드 위젯이 쓰는 긴 임의 문자열. 토큰 하나 = 구성원 하나
+  token(pk), family_id, member_id, created_at
 ```
 
 ### 규칙
@@ -116,6 +120,7 @@ push_subscription  알림을 켠 기기. 화면에는 안 나옴. Edge Function 
 - **사진은 어디에도 저장하지 않습니다.** 숙제 사진은 글자만 뽑아내고 버립니다. 테이블에 이미지 컬럼을 추가하지 마세요 (아래 참고).
 - **대화는 최근 200개만 읽습니다.** 쌓이기만 하는 유일한 테이블이라 전체 다시 읽기 규칙의 예외입니다. '어디까지 읽었나'는 `chat_read` 에 **구성원당 한 줄(마지막 읽은 시각)** 만 둡니다. 메시지마다 읽음 줄을 남기는 표를 만들지 마세요. 탭 배지용 값은 기기(localStorage)에도 따로 둡니다. 읽음은 **화면이 실제로 보일 때만** 기록합니다 (`visibilityState`) — 뒤에 있는 앱이 받은 메시지를 읽음으로 남기면 거짓 얼굴이 뜹니다.
 - **나중에 추가된 테이블(`message`, `comment`)은 없어도 앱이 뜹니다.** schema.sql 재실행 전이면 그 기능만 '준비 중'/숨김이고 나머지는 그대로 돕니다. 새 테이블을 또 추가하면 같은 방식으로 `loadAll` 에서 실패를 흡수하세요.
+- **안드로이드 앱은 화면을 갖지 않습니다.** `android/` 는 웹을 크롬으로 띄우는 껍데기(Trusted Web Activity)와 위젯만 있습니다. 화면을 고치려고 안드로이드 코드를 건드리지 마세요 — 웹을 배포하면 앱도 바뀝니다. 위젯 데이터는 `widget_token` 으로 Edge Function `widget` 을 불러 받고, 문구는 서버가 만듭니다(웹의 날짜 규칙과 어긋나지 않게). APK 는 GitHub Actions 만 만들고(`.github/workflows/android.yml`) 서명 키 원본은 PC 의 `android-signing.local/`. 주소창 없이 뜨게 하는 `assetlinks.json` 은 별도 저장소 `lmjpt/lmjpt.github.io` 에 있습니다.
 - **푸시 알림은 서버 쪽 조각이 따로 있습니다.** `supabase/functions/notify`(Edge Function, Deno) 가 `message`/`comment` INSERT 웹훅을 받아 웹 푸시를 보냅니다. 브라우저 쪽은 `lib/push.ts` + `public/sw.js`. 서비스 워커는 **캐시를 하지 않습니다** — 배포 후 옛 화면이 남는 문제를 만들지 마세요. VAPID 키는 바꾸면 모든 구독이 무효가 됩니다.
 
 ## 4. 권한
@@ -170,6 +175,7 @@ src/
     tasks/        할일·숙제 (TaskBoard / TaskRow / TaskForm)
                   + ImportFromPhoto — 사진에서 숙제 가져오기
     points/       칭찬·벌점 주기
+    widget/       설정의 '위젯 연결' 칸 (안드로이드에서만 보임)
     chat/         대화방 (MessageList / Composer / unread — 안 읽은 개수는 기기에만)
     comments/     항목 댓글 (CommentButton 이 줄 끝에 붙고 CommentsModal 을 엽니다)
     push/         설정의 알림 켜기/끄기 칸
@@ -191,6 +197,9 @@ supabase/
   schema.sql      테이블 + RLS + Realtime. SQL Editor 에 붙여넣어 실행합니다
   PUSH.md         푸시 알림 서버 쪽 설정 방법
   functions/notify/  새 대화·댓글을 푸시로 보내는 Edge Function (Deno, 린트 제외)
+  functions/widget/  안드로이드 위젯에 오늘 일정·마감 줄을 주는 Edge Function
+
+android/          안드로이드 앱 껍데기 + 바탕화면 위젯 (Kotlin). android/README.md 참고
 ```
 
 - 도메인 로직은 `features/` 안에, 화면 조립만 `pages/`에서 합니다.

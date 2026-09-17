@@ -110,6 +110,15 @@ create table if not exists comment (
   check ((event_id is null) <> (task_id is null))
 );
 
+-- 안드로이드 위젯 토큰. 웹 화면의 '위젯 연결'을 누를 때마다 한 줄 생기고, 그 폰의 위젯이
+-- 이 값으로 Edge Function 'widget' 을 부릅니다. 토큰 하나 = 구성원 하나 (누구 것을 보여 줄지).
+create table if not exists widget_token (
+  token      text primary key,
+  family_id  uuid not null references family(id) on delete cascade,
+  member_id  uuid not null references member(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
 -- 푸시 알림 구독. 알림을 켠 기기(브라우저)마다 한 줄. 화면에는 나오지 않습니다.
 -- Edge Function(supabase/functions/notify)이 새 메시지·댓글이 생기면 여기 있는
 -- 기기들로 알림을 보냅니다. 보낸 사람 본인 기기는 건너뜁니다.
@@ -153,6 +162,7 @@ alter table message     enable row level security;
 alter table comment     enable row level security;
 alter table chat_read   enable row level security;
 alter table push_subscription enable row level security;
+alter table widget_token enable row level security;
 
 drop policy if exists family_own on family;
 create policy family_own on family
@@ -205,6 +215,12 @@ create policy comment_own on comment
 
 drop policy if exists chat_read_own on chat_read;
 create policy chat_read_own on chat_read
+  for all to authenticated
+  using (family_id in (select id from family where owner_id = auth.uid()))
+  with check (family_id in (select id from family where owner_id = auth.uid()));
+
+drop policy if exists widget_token_own on widget_token;
+create policy widget_token_own on widget_token
   for all to authenticated
   using (family_id in (select id from family where owner_id = auth.uid()))
   with check (family_id in (select id from family where owner_id = auth.uid()));

@@ -784,6 +784,17 @@ export function removeComment(id: string) {
   )
 }
 
+// ── 안드로이드 위젯 토큰 ──────────────────────────────────────
+// 위젯은 웹 세션을 볼 수 없어서, 대신 쓸 긴 임의 문자열을 하나 만들어 폰에 건네줍니다.
+
+export async function createWidgetToken(memberId: string): Promise<{ token: string } | { error: string }> {
+  const token = (newId() + newId()).replace(/-/g, '')
+  const { error } = await supabase
+    .from('widget_token')
+    .insert({ token, family_id: familyId, member_id: memberId })
+  return error ? { error: describe(error) } : { token }
+}
+
 // ── 푸시 알림 구독 ────────────────────────────────────────────
 // 화면에 그리는 데이터가 아니라 메모리 상태에는 두지 않고 서버에만 씁니다.
 

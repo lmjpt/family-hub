@@ -3,6 +3,12 @@ dist
 dist-ssr
 *.local
 
+# 안드로이드 빌드 결과물과 서명 키 (빌드는 GitHub Actions 에서만 합니다)
+android/.gradle
+android/**/build/
+android/keystore.p12
+android/local.properties
+
 # 실제 가족 데이터가 들어갈 수 있는 파일은 절대 커밋하지 않는다.
 .env
 .env.local
