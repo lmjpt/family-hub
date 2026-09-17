@@ -74,6 +74,13 @@ android/app/src/main/
 `RelativeLayout`, `TextView`, `ImageView`, `Button`, `ProgressBar` 정도입니다. plain `View`,
 `ConstraintLayout`, 커스텀 뷰를 넣으면 빌드는 되지만 **폰에서 빈 상자만 보입니다.**
 
+## 앱은 항상 크롬으로 엽니다 (1.6+)
+
+매니페스트의 `LAUNCHING_BROWSER` 로 크롬(`com.android.chrome`)을 고정했습니다. 삼성 폰은 기본
+브라우저가 삼성 인터넷인데, 그걸로 열리면 알림이 "인터넷" 이름으로 오고 앱 이름 위임이 안 됩니다.
+브라우저를 바꾼 뒤에는 서비스 워커·푸시 구독이 새 브라우저에 새로 생기므로, **앱에서 알림을 끄고
+다시 켜야** 합니다(옛 브라우저 구독은 함수가 만료 응답을 받으면 자동으로 지웁니다).
+
 ## 알림이 안 올 때
 
 앱의 알림은 웹 푸시이고, 크롬이 대신 띄웁니다. 앱(1.4+)에 알림 위임(DelegationService +
