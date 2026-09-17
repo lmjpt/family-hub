@@ -18,25 +18,17 @@
             android:name="asset_statements"
             android:resource="@string/asset_statements" />
 
-        <!-- 웹앱을 전체 화면으로 여는 진입점 (Trusted Web Activity) -->
+        <!--
+          웹앱을 전체 화면으로 여는 진입점 (Trusted Web Activity).
+          크롬이 쓸 수 있으면 크롬으로, 아니면 기본 브라우저로 엽니다 (MainActivity 참고).
+        -->
         <activity
-            android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
+            android:name=".MainActivity"
             android:exported="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar">
             <meta-data
                 android:name="android.support.customtabs.trusted.DEFAULT_URL"
                 android:value="https://lmjpt.github.io/family-hub/" />
-            <!--
-              항상 크롬으로 엽니다. 기본 브라우저가 삼성 인터넷이면 앱이 그걸 쓰게 되는데,
-              알림을 '우리집' 이름으로 넘겨 주는(위임) 기능은 크롬만 지원해서 알림이
-              '인터넷' 이름으로 옵니다. 크롬이 없는 폰이면 라이브러리가 안내 창을 띄웁니다.
-            -->
-            <meta-data
-                android:name="android.support.customtabs.trusted.LAUNCHING_BROWSER"
-                android:value="com.android.chrome" />
-            <meta-data
-                android:name="android.support.customtabs.trusted.LAUNCHING_BROWSER_NAME"
-                android:value="Chrome" />
             <meta-data
                 android:name="android.support.customtabs.trusted.STATUS_BAR_COLOR"
                 android:resource="@color/cream" />

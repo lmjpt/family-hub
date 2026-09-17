@@ -6,7 +6,6 @@ import android.content.Intent
 import android.net.Uri
 import android.view.View
 import android.widget.RemoteViews
-import com.google.androidbrowserhelper.trusted.LauncherActivity
 import org.json.JSONObject
 import java.net.URL
 import java.text.SimpleDateFormat
@@ -105,7 +104,7 @@ object WidgetData {
 
         // 어디를 눌러도 앱(일정 화면)이 열립니다.
         // (apply 안에서 `data = ...` 라고 쓰면 매개변수 data 와 헷갈려 컴파일이 안 됩니다)
-        val open = Intent(context, LauncherActivity::class.java)
+        val open = Intent(context, MainActivity::class.java)
         open.action = Intent.ACTION_VIEW
         open.data = Uri.parse(APP_URL)
         val pending = PendingIntent.getActivity(
