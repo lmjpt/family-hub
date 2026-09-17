@@ -36,11 +36,6 @@
                 android:name="android.support.customtabs.trusted.NAVIGATION_BAR_COLOR"
                 android:resource="@color/cream" />
 
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-
             <!-- 위젯을 누르거나 우리 사이트 링크를 열면 이 앱으로 -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
@@ -52,6 +47,21 @@
                     android:pathPrefix="/family-hub" />
             </intent-filter>
         </activity>
+
+        <!--
+          홈 화면 아이콘이 가리키는 이름. 1.5 까지 진입점이 이 이름이었기 때문에, 이미 바탕화면에
+          만들어진 아이콘이 계속 동작하도록 같은 이름의 별칭을 두고 MainActivity 로 넘깁니다.
+          (진입점 이름을 바꾸면 기존 아이콘이 "앱을 열 수 없습니다"로 깨집니다.)
+        -->
+        <activity-alias
+            android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
+            android:targetActivity=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <!--
           알림 위임. 이게 있으면 크롬이 웹 푸시 알림을 '크롬' 이 아니라 '우리집' 앱 이름으로

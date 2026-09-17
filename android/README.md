@@ -74,7 +74,16 @@ android/app/src/main/
 `RelativeLayout`, `TextView`, `ImageView`, `Button`, `ProgressBar` 정도입니다. plain `View`,
 `ConstraintLayout`, 커스텀 뷰를 넣으면 빌드는 되지만 **폰에서 빈 상자만 보입니다.**
 
-## 앱은 크롬이 있으면 크롬으로 엽니다 (1.7+)
+## 라이브러리·빌드 도구 버전은 올리지 마세요
+
+androidbrowserhelper **2.5.0 + AGP 8.7.3 + compileSdk 35 + Gradle 8.11.1** 조합이 검증된 것입니다.
+2.7.3(+AGP 8.11, compileSdk 36)으로 올린 1.6/1.7 은 폰에서 앱이 켜지자마자 꺼졌습니다. 원인은
+확인하지 못했고(로그를 볼 수 없는 환경), 되돌린 1.8 로 정상화했습니다.
+
+진입점 이름은 `com.google.androidbrowserhelper.trusted.LauncherActivity` 별칭으로 유지합니다.
+바탕화면 아이콘이 이 이름을 가리키고 있어서, 바꾸면 아이콘이 깨집니다.
+
+## 앱은 크롬이 있으면 크롬으로 엽니다 (1.8+)
 
 `MainActivity` 가 크롬(`com.android.chrome`)이 설치·사용 가능하면 크롬으로, 아니면 기본 브라우저로
 엽니다. 삼성 폰은 기본 브라우저가 삼성 인터넷인데, 그걸로 열리면 알림이 "인터넷" 이름으로 오고

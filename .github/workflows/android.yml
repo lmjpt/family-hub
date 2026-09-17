@@ -37,8 +37,7 @@ jobs:
       # gradle wrapper(jar) 를 저장소에 넣지 않고 Actions 가 Gradle 을 직접 준비합니다.
       - uses: gradle/actions/setup-gradle@v4
         with:
-          # AGP 8.11 은 Gradle 8.13 이상이 필요합니다
-          gradle-version: '8.13'
+          gradle-version: '8.11.1'
 
       - name: 서명 키 준비
         run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/keystore.p12
