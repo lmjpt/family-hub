@@ -14,10 +14,18 @@ export default function Chat() {
   const ready = useChatReady()
   const messages = db.messages
 
-  // 이 화면을 보고 있으면 마지막 메시지까지 읽은 것으로 칩니다.
+  // 이 화면이 실제로 보이는 동안만 마지막 메시지까지 읽은 것으로 칩니다.
+  // 앱이 뒤로 가 있는데(화면 꺼짐, 다른 앱) 메시지가 오면 읽은 게 아닙니다 —
+  // 그때 읽음으로 남기면 다른 가족에게 거짓 '봤어요' 얼굴이 뜹니다.
   useEffect(() => {
     if (!me || messages.length === 0) return
-    markRead(me.id, messages[messages.length - 1].createdAt)
+    const latest = messages[messages.length - 1].createdAt
+    const markIfVisible = () => {
+      if (document.visibilityState === 'visible') markRead(me.id, latest)
+    }
+    markIfVisible()
+    document.addEventListener('visibilitychange', markIfVisible)
+    return () => document.removeEventListener('visibilitychange', markIfVisible)
   }, [me, messages])
 
   // 새 메시지가 오면 맨 아래로. 대화방은 항상 최신이 보여야 합니다.
@@ -46,6 +54,7 @@ export default function Chat() {
         messages={messages}
         me={me}
         members={db.members}
+        reads={db.chatReads}
         onDelete={canDeleteMessage(me) ? removeMessage : null}
       />
       <Composer onSend={(body) => void sendMessage(me.id, body)} />

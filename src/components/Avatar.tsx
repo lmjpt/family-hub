@@ -1,6 +1,7 @@
 import type { Member } from '../types'
 
 const SIZES = {
+  xs: 'h-5 w-5 text-[11px]',
   sm: 'h-8 w-8 text-lg',
   md: 'h-11 w-11 text-2xl',
   lg: 'h-16 w-16 text-4xl',

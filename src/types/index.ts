@@ -92,6 +92,12 @@ export interface Comment {
   createdAt: string
 }
 
+/** 대화방에서 이 사람이 마지막으로 읽은 시각. 구성원마다 하나. */
+export interface ChatRead {
+  memberId: string
+  lastReadAt: string
+}
+
 /** 가족 대화방 메시지. 방은 가족당 하나뿐입니다. */
 export interface Message {
   id: string

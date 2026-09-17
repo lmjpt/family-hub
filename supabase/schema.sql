@@ -88,6 +88,15 @@ create table if not exists message (
   created_at timestamptz not null default now()
 );
 
+-- 대화방에서 '누가 어디까지 읽었나'. 구성원마다 한 줄, 마지막으로 읽은 시각만 둡니다.
+-- 메시지마다 읽음 줄을 남기지 않는 이유: 가족 대화방에는 그 정밀도가 필요 없고
+-- 쌓이기만 하는 표를 하나 더 만들고 싶지 않기 때문입니다.
+create table if not exists chat_read (
+  family_id    uuid not null references family(id) on delete cascade,
+  member_id    uuid primary key references member(id) on delete cascade,
+  last_read_at timestamptz not null default now()
+);
+
 -- 일정·할일(숙제) 항목마다 달리는 짧은 댓글. "이거 모르겠어요", "확인했어" 정도.
 -- 일정 또는 할일 중 정확히 하나에만 달립니다. 원본이 지워지면 함께 사라집니다.
 create table if not exists comment (
@@ -142,6 +151,7 @@ alter table point_entry enable row level security;
 alter table reward      enable row level security;
 alter table message     enable row level security;
 alter table comment     enable row level security;
+alter table chat_read   enable row level security;
 alter table push_subscription enable row level security;
 
 drop policy if exists family_own on family;
@@ -193,6 +203,12 @@ create policy comment_own on comment
   using (family_id in (select id from family where owner_id = auth.uid()))
   with check (family_id in (select id from family where owner_id = auth.uid()));
 
+drop policy if exists chat_read_own on chat_read;
+create policy chat_read_own on chat_read
+  for all to authenticated
+  using (family_id in (select id from family where owner_id = auth.uid()))
+  with check (family_id in (select id from family where owner_id = auth.uid()));
+
 drop policy if exists push_subscription_own on push_subscription;
 create policy push_subscription_own on push_subscription
   for all to authenticated
@@ -208,7 +224,7 @@ do $$
 declare
   t text;
 begin
-  foreach t in array array['family', 'member', 'event', 'task', 'point_entry', 'reward', 'message', 'comment'] loop
+  foreach t in array array['family', 'member', 'event', 'task', 'point_entry', 'reward', 'message', 'comment', 'chat_read'] loop
     if not exists (
       select 1 from pg_publication_tables
       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t

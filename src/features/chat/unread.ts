@@ -1,8 +1,9 @@
-// '어디까지 읽었나'는 기기에만 기억합니다 (localStorage).
-// 서버에 읽음 상태를 두면 테이블이 하나 더 필요한데, 가족 대화방에
-// '읽음 표시' 까지는 과합니다. 탭에 숫자 배지를 띄우는 용도로만 씁니다.
+// '어디까지 읽었나'를 두 곳에 기억합니다.
+//   · 기기(localStorage): 탭의 숫자 배지용. 서버가 없어도, 테이블이 없어도 돕니다.
+//   · 서버(chat_read): 다른 가족 화면에 "여기까지 봤어요" 얼굴을 붙이는 용도.
 
 import { useSyncExternalStore } from 'react'
+import { markChatRead } from '../../lib/db'
 import type { Member, Message } from '../../types'
 
 const key = (memberId: string) => `family-hub-chat-read-${memberId}`
@@ -22,8 +23,11 @@ function lastReadAt(memberId: string): number {
   return Number(localStorage.getItem(key(memberId)) ?? 0)
 }
 
-/** 대화방을 보고 있을 때 호출합니다. 더 옛날 시각으로는 되돌리지 않습니다. */
+/** 대화방을 실제로 보고 있을 때만 호출합니다. 더 옛날 시각으로는 되돌리지 않습니다. */
 export function markRead(memberId: string, latestIso: string) {
+  // 서버 쪽은 자기 나름대로 '뒤로 가지 않기'를 검사하므로 항상 알려 줍니다.
+  markChatRead(memberId, latestIso)
+
   const at = new Date(latestIso).getTime()
   if (!Number.isFinite(at) || at <= lastReadAt(memberId)) return
   localStorage.setItem(key(memberId), String(at))

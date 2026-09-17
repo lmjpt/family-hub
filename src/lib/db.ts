@@ -19,6 +19,7 @@ import { useSyncExternalStore } from 'react'
 import { supabase } from './supabase'
 import { starterMembers, starterRewards } from './seed'
 import type {
+  ChatRead,
   Comment,
   Family,
   FamilyEvent,
@@ -40,6 +41,8 @@ export interface DbShape {
   messages: Message[]
   /** 일정·할일에 달린 댓글 전부 (오래된 순) */
   comments: Comment[]
+  /** 대화방에서 구성원마다 어디까지 읽었나 */
+  chatReads: ChatRead[]
 }
 
 /** 아직 아무것도 못 읽었을 때의 빈 상태 */
@@ -52,6 +55,7 @@ const EMPTY: DbShape = {
   rewards: [],
   messages: [],
   comments: [],
+  chatReads: [],
 }
 
 /**
@@ -194,6 +198,11 @@ const fromMessage = (m: Partial<Message>): Row => prune({
   created_at: m.createdAt,
 })
 
+const toChatRead = (r: Row): ChatRead => ({
+  memberId: r.member_id,
+  lastReadAt: r.last_read_at,
+})
+
 const toComment = (r: Row): Comment => ({
   id: r.id,
   familyId: r.family_id,
@@ -236,6 +245,8 @@ let lastError = ''
 let chatReady = true
 /** comment 테이블이 없으면 false. 댓글 버튼을 숨기고 나머지는 그대로 돕니다. */
 let commentsReady = true
+/** chat_read 테이블이 없으면 false. 읽음 표시만 빠지고 대화는 그대로 됩니다. */
+let readsReady = true
 const listeners = new Set<() => void>()
 
 function notify() {
@@ -299,7 +310,7 @@ export function useDbStatus(): DbStatus {
 // ── 읽기 ──────────────────────────────────────────────────────
 
 async function loadAll(id: string): Promise<void> {
-  const [family, members, events, tasks, points, rewards, messages, comments] =
+  const [family, members, events, tasks, points, rewards, messages, comments, reads] =
     await Promise.all([
       supabase.from('family').select('*').eq('id', id).single(),
       supabase.from('member').select('*').eq('family_id', id).order('created_at'),
@@ -314,17 +325,20 @@ async function loadAll(id: string): Promise<void> {
         .order('created_at', { ascending: false })
         .limit(MESSAGE_LIMIT),
       supabase.from('comment').select('*').eq('family_id', id).order('created_at'),
+      supabase.from('chat_read').select('*').eq('family_id', id),
     ])
 
   const failed = [family, members, events, tasks, points, rewards].find((r) => r.error)
   if (failed?.error) throw failed.error
 
-  // 나중에 추가된 테이블(대화, 댓글)은 없어도 앱 전체가 멈추면 안 됩니다.
+  // 나중에 추가된 테이블(대화, 댓글, 읽음)은 없어도 앱 전체가 멈추면 안 됩니다.
   // schema.sql 을 다시 실행하기 전까지 그 기능만 '준비 중'으로 둡니다.
   if (messages.error) console.warn('대화방을 읽지 못했습니다', messages.error)
   if (comments.error) console.warn('댓글을 읽지 못했습니다', comments.error)
+  if (reads.error) console.warn('읽음 표시를 읽지 못했습니다', reads.error)
   chatReady = !messages.error
   commentsReady = !comments.error
+  readsReady = !reads.error
 
   setState({
     family: { id: family.data!.id, name: family.data!.name },
@@ -335,6 +349,7 @@ async function loadAll(id: string): Promise<void> {
     rewards: (rewards.data ?? []).map(toReward),
     messages: (messages.data ?? []).map(toMessage).reverse(),
     comments: (comments.data ?? []).map(toComment),
+    chatReads: (reads.data ?? []).map(toChatRead),
   })
 }
 
@@ -392,6 +407,7 @@ function watch(id: string) {
   // 없는 테이블을 구독하면 채널 전체가 실패하므로 있을 때만 넣습니다.
   if (chatReady) tables.push('message')
   if (commentsReady) tables.push('comment')
+  if (readsReady) tables.push('chat_read')
   for (const table of tables) {
     channel.on(
       'postgres_changes',
@@ -705,6 +721,35 @@ export function sendMessage(senderId: string, body: string) {
 export function removeMessage(id: string) {
   write({ ...state, messages: state.messages.filter((m) => m.id !== id) }, () =>
     supabase.from('message').delete().eq('id', id),
+  )
+}
+
+/**
+ * 대화방을 보고 있는 사람이 '여기까지 읽었다'고 서버에 남깁니다.
+ * 다른 가족 화면에는 그 자리에 이 사람 얼굴이 붙습니다.
+ * 뒤로 가는 시각은 무시합니다 (옛 기기가 늦게 보내는 경우).
+ */
+export function markChatRead(memberId: string, lastReadAt: string) {
+  if (!readsReady) return
+  const at = new Date(lastReadAt).getTime()
+  const current = state.chatReads.find((r) => r.memberId === memberId)
+  if (!Number.isFinite(at) || (current && new Date(current.lastReadAt).getTime() >= at)) return
+
+  write(
+    {
+      ...state,
+      chatReads: [
+        ...state.chatReads.filter((r) => r.memberId !== memberId),
+        { memberId, lastReadAt },
+      ],
+    },
+    () =>
+      supabase
+        .from('chat_read')
+        .upsert(
+          { family_id: familyId, member_id: memberId, last_read_at: lastReadAt },
+          { onConflict: 'member_id' },
+        ),
   )
 }
 

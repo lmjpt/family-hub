@@ -1,18 +1,55 @@
+import { useMemo } from 'react'
 import Avatar from '../../components/Avatar'
 import EmptyState from '../../components/EmptyState'
 import { dayKey, formatDayLabel, formatTime } from '../../lib/date'
-import type { Member, Message } from '../../types'
+import type { ChatRead, Member, Message } from '../../types'
 
 interface Props {
   messages: Message[]
   me: Member
   members: Member[]
+  /** 구성원마다 어디까지 읽었나. 그 자리 아래에 얼굴을 붙입니다 */
+  reads: ChatRead[]
   /** null 이면 지우기 버튼을 보이지 않습니다 */
   onDelete: ((id: string) => void) | null
 }
 
+/**
+ * 각 사람(나는 빼고)이 마지막으로 읽은 메시지를 찾습니다.
+ * 결과: 메시지 id → 그 자리까지 읽은 사람들
+ */
+function readMarkers(
+  messages: Message[],
+  members: Member[],
+  reads: ChatRead[],
+  meId: string,
+): Map<string, Member[]> {
+  const map = new Map<string, Member[]>()
+  for (const read of reads) {
+    if (read.memberId === meId) continue
+    const member = members.find((m) => m.id === read.memberId)
+    if (!member) continue
+    const at = new Date(read.lastReadAt).getTime()
+    // 뒤에서부터 찾으면 대개 한두 개만 보고 끝납니다 (다들 최근까지 읽었으므로).
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      if (new Date(messages[i].createdAt).getTime() <= at) {
+        const list = map.get(messages[i].id)
+        if (list) list.push(member)
+        else map.set(messages[i].id, [member])
+        break
+      }
+    }
+  }
+  return map
+}
+
 /** 대화 말풍선 목록. 내 것은 오른쪽, 다른 사람 것은 얼굴과 함께 왼쪽. */
-export default function MessageList({ messages, me, members, onDelete }: Props) {
+export default function MessageList({ messages, me, members, reads, onDelete }: Props) {
+  const markers = useMemo(
+    () => readMarkers(messages, members, reads, me.id),
+    [messages, members, reads, me.id],
+  )
+
   if (messages.length === 0) {
     return (
       <div className="card">
@@ -81,6 +118,19 @@ export default function MessageList({ messages, me, members, onDelete }: Props) 
                 )}
               </div>
             </div>
+            {/* 여기까지 읽은 사람들의 얼굴. "엄마는 여기까지 봤다"가 한눈에 보이게. */}
+            {markers.has(m.id) && (
+              <div
+                className="mt-1 flex items-center justify-end gap-1 pr-1"
+                aria-label={`${markers.get(m.id)!.map((x) => x.name).join(', ')} 읽음`}
+                title={`${markers.get(m.id)!.map((x) => x.name).join(', ')} 여기까지 봤어요`}
+              >
+                <span className="text-[10px] font-semibold text-muted">여기까지</span>
+                {markers.get(m.id)!.map((member) => (
+                  <Avatar key={member.id} member={member} size="xs" />
+                ))}
+              </div>
+            )}
           </li>
         )
       })}
