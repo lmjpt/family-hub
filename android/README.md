@@ -53,6 +53,12 @@ android/app/src/main/
 2. 설치된 **우리집** 앱을 열고 로그인 → 설정 → **위젯 연결**.
 3. 바탕화면 빈 곳을 길게 눌러 위젯 → **우리집 오늘** 을 추가합니다.
 
+## 위젯 레이아웃을 고칠 때 (중요)
+
+위젯 화면(RemoteViews)은 쓸 수 있는 요소가 정해져 있습니다: `LinearLayout`, `FrameLayout`,
+`RelativeLayout`, `TextView`, `ImageView`, `Button`, `ProgressBar` 정도입니다. plain `View`,
+`ConstraintLayout`, 커스텀 뷰를 넣으면 빌드는 되지만 **폰에서 빈 상자만 보입니다.**
+
 ## 앱을 고칠 때
 
 - 화면·기능은 웹만 고치면 됩니다. APK 다시 만들 필요 없습니다.

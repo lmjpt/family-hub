@@ -12,8 +12,8 @@ android {
         minSdk = 24
         targetSdk = 35
         // 버전을 올릴 때는 두 줄을 함께. versionCode 는 설치된 것보다 커야 업데이트됩니다.
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
     }
 
     // 서명 키는 GitHub Actions 의 secret 에서 옵니다 (android-signing.local 폴더 원본).

@@ -32,8 +32,10 @@
     <TextView android:id="@+id/line5" style="@style/WidgetLine" android:visibility="gone" />
     <TextView android:id="@+id/line6" style="@style/WidgetLine" android:visibility="gone" />
 
-    <View
-        android:layout_width="0dp"
+    <!-- 남는 세로 공간을 먹는 빈 칸. 위젯(RemoteViews)에서는 plain View 를 쓸 수 없어서
+         FrameLayout 을 씁니다. View 를 넣으면 런처가 위젯을 그리지 못해 빈 상자만 보입니다. -->
+    <FrameLayout
+        android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1" />
 
