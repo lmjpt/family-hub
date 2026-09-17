@@ -665,6 +665,51 @@ export function totalPoints(points: PointEntry[], memberId: string): number {
   return points.reduce((sum, p) => (p.memberId === memberId ? sum + p.points : sum), 0)
 }
 
+/**
+ * 내 포인트를 가족에게 선물합니다. 기록 두 줄(주는 쪽 −, 받는 쪽 +)이 같은 시각으로 남고,
+ * 총점은 항상 이력의 합이므로 두 사람 잔액이 저절로 맞습니다. 가진 것보다 많이는 못 줍니다.
+ * 성공하면 null, 안 되면 화면에 보여 줄 문구를 돌려줍니다.
+ */
+export function giftPoints(input: {
+  fromId: string
+  toId: string
+  points: number
+  message: string
+}): string | null {
+  const points = Math.floor(input.points)
+  if (input.fromId === input.toId) return '자기 자신에게는 선물할 수 없어요.'
+  if (points <= 0) return '1점 이상이어야 해요.'
+  const balance = totalPoints(state.points, input.fromId)
+  if (points > balance) return `가진 점수(${balance}점)보다 많이 줄 수 없어요.`
+  const from = state.members.find((m) => m.id === input.fromId)
+  const to = state.members.find((m) => m.id === input.toId)
+  if (!from || !to) return '구성원을 찾을 수 없어요.'
+
+  const now = new Date().toISOString()
+  const note = input.message.trim() ? ` "${input.message.trim()}"` : ''
+  const given: PointEntry = {
+    id: newId(),
+    familyId,
+    memberId: from.id,
+    points: -points,
+    reason: `선물 → ${to.name}${note}`,
+    givenBy: from.id,
+    createdAt: now,
+    taskId: null,
+  }
+  const received: PointEntry = {
+    ...given,
+    id: newId(),
+    memberId: to.id,
+    points,
+    reason: `선물 ← ${from.name}${note}`,
+  }
+  write({ ...state, points: [...state.points, given, received] }, () =>
+    supabase.from('point_entry').insert([fromPoint(given), fromPoint(received)]),
+  )
+  return null
+}
+
 // ── 보상 ──────────────────────────────────────────────────────
 
 export function addReward(input: Omit<Reward, 'id' | 'familyId'>) {

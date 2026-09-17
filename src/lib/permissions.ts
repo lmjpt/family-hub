@@ -46,6 +46,11 @@ export function canGivePoints(me: Member | null): boolean {
   return isParent(me)
 }
 
+/** 선물은 자기 포인트로만. 부모라도 남의 점수를 대신 옮기지는 않습니다 (그건 칭찬/취소로). */
+export function canGiftPoints(me: Member | null, fromId: string): boolean {
+  return me !== null && me.id === fromId
+}
+
 /** 아이는 자기 포인트 이력만 봅니다. */
 export function canSeePointsOf(me: Member | null, memberId: string): boolean {
   if (!me) return false

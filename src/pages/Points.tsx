@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 import Avatar from '../components/Avatar'
 import EmptyState from '../components/EmptyState'
+import GiftPoints from '../features/points/GiftPoints'
 import GivePoints from '../features/points/GivePoints'
 import { useMe } from '../features/auth'
 import { cancelPointEntry, redeemReward, totalPoints, useDb } from '../lib/db'
 import { formatShort } from '../lib/date'
-import { canGivePoints, canManageRewards, isParent } from '../lib/permissions'
+import { canGiftPoints, canGivePoints, canManageRewards, isParent } from '../lib/permissions'
 
 export default function Points() {
   const db = useDb()
@@ -21,6 +22,10 @@ export default function Points() {
   const selected = db.members.find((m) => m.id === selectedId) ?? null
 
   const [giving, setGiving] = useState<'praise' | 'minus' | null>(null)
+  const [gifting, setGifting] = useState(false)
+
+  // 부모는 아이들 + 자기 자신을 골라 볼 수 있습니다 (자기 점수로 선물할 수 있게).
+  const pickable = isParent(me) && me ? [...children, me] : children
 
   const history = useMemo(
     () =>
@@ -47,9 +52,9 @@ export default function Points() {
   return (
     <div className="space-y-5">
       {/* 부모만 아이를 골라 봅니다 */}
-      {isParent(me) && children.length > 1 && (
+      {isParent(me) && pickable.length > 1 && (
         <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
-          {children.map((c) => (
+          {pickable.map((c) => (
             <button
               key={c.id}
               type="button"
@@ -61,7 +66,7 @@ export default function Points() {
               }`}
             >
               <Avatar member={c} size="sm" />
-              {c.name}
+              {c.id === me?.id ? '나' : c.name}
               <span className="text-praise">{totalPoints(db.points, c.id)}</span>
             </button>
           ))}
@@ -77,7 +82,19 @@ export default function Points() {
           <span className="text-lg font-bold text-praise">점</span>
         </p>
 
-        {canGivePoints(me) && (
+        {/* 내 점수 화면이면 선물하기. 아이가 동생·형에게, 부모가 아이에게. */}
+        {canGiftPoints(me, selected.id) && db.members.length > 1 && (
+          <button
+            type="button"
+            onClick={() => setGifting(true)}
+            disabled={total <= 0}
+            className="btn btn-ghost mt-2 w-full py-3"
+          >
+            🎁 포인트 선물하기
+          </button>
+        )}
+
+        {canGivePoints(me) && selected.id !== me?.id && (
           <div className="mt-2 flex w-full flex-col items-center gap-2">
             <button
               type="button"
@@ -219,6 +236,8 @@ export default function Points() {
           onClose={() => setGiving(null)}
         />
       )}
+
+      {gifting && me && <GiftPoints open from={me} onClose={() => setGifting(false)} />}
     </div>
   )
 }
