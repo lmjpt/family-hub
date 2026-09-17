@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "io.github.lmjpt.familyhub"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "io.github.lmjpt.familyhub"
