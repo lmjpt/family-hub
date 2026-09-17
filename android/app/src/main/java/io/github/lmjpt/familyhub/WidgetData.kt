@@ -92,10 +92,10 @@ object WidgetData {
         views.setTextViewText(R.id.footer, data.footer)
 
         // 어디를 눌러도 앱(일정 화면)이 열립니다.
-        val open = Intent(context, LauncherActivity::class.java).apply {
-            action = Intent.ACTION_VIEW
-            data = Uri.parse(APP_URL)
-        }
+        // (apply 안에서 `data = ...` 라고 쓰면 매개변수 data 와 헷갈려 컴파일이 안 됩니다)
+        val open = Intent(context, LauncherActivity::class.java)
+        open.action = Intent.ACTION_VIEW
+        open.data = Uri.parse(APP_URL)
         val pending = PendingIntent.getActivity(
             context, 0, open,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
