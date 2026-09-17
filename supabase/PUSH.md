@@ -45,14 +45,18 @@ CLI 라면 한 줄로: `npx supabase secrets set --env-file supabase/vapid-keys.
 > 공개 키는 `src/lib/push.ts` 에도 들어 있습니다. **키를 새로 만들면 안 됩니다** —
 > 이미 알림을 켜 둔 기기의 구독이 전부 무효가 됩니다.
 
-## 3. 웹훅 (새 글 → 함수 호출)
+## 3. 트리거 (새 글 → 함수 호출)
 
-Database → *Webhooks* 에서 처음이면 *Enable webhooks* 를 한 번 누릅니다.
-그 다음 `supabase/push-webhook.sql.local` 내용을 SQL Editor 에서 실행합니다
+`supabase/push-webhook.sql.local` 내용을 SQL Editor 에서 실행합니다
 (프로젝트 주소와 anon 키가 채워져 있어 git 에 올라가지 않는 파일입니다).
 
-손으로 만들고 싶으면 Webhooks 화면에서 두 개를 만듭니다:
-`message` INSERT → Edge Function `notify`, `comment` INSERT → Edge Function `notify`.
+대시보드의 Database Webhooks 화면이나 *Enable webhooks* 버튼은 **필요 없습니다.**
+이 SQL 은 `pg_net` 확장을 직접 켜고, `message`/`comment` 에 INSERT 가 생기면
+`net.http_post` 로 함수를 부르는 트리거를 만듭니다. 웹훅 화면이 만드는 것과 같은 내용입니다.
+
+함수 쪽에서는 **Verify JWT 를 꺼 두세요.** 우리 키는 `sb_publishable_` 형식이라 JWT 가
+아니어서, 검증을 켜 두면 호출이 거부됩니다. 함수는 넘어온 내용을 믿지 않고 항상 DB 에서
+다시 읽으므로 꺼도 위험이 거의 없습니다.
 
 ## 4. 확인
 
