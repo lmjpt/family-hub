@@ -173,7 +173,7 @@ src/
   features/
     familyAuth.tsx 1단계 — 가족 계정 (기기마다 한 번)
     auth.tsx      2단계 — 누구세요 (얼굴 + PIN)
-    events/       일정 폼
+    events/       일정 폼 (EventForm) + 고른 날 목록 (DayAgenda)
     tasks/        할일·숙제 (TaskBoard / TaskRow / TaskForm)
                   + ImportFromPhoto — 사진에서 숙제 가져오기
     points/       칭찬·벌점 주기
