@@ -107,6 +107,7 @@ const toEvent = (r: Row): FamilyEvent => ({
   allDay: r.all_day,
   ownerId: r.owner_id,
   memo: r.memo ?? '',
+  seriesId: r.series_id ?? null,
 })
 
 const fromEvent = (e: Partial<FamilyEvent>): Row => prune({
@@ -118,6 +119,7 @@ const fromEvent = (e: Partial<FamilyEvent>): Row => prune({
   all_day: e.allDay,
   owner_id: e.ownerId,
   memo: e.memo,
+  series_id: e.seriesId,
 })
 
 const toTask = (r: Row): Task => ({
@@ -521,12 +523,55 @@ export function renameFamily(name: string) {
 
 // ── 일정 ──────────────────────────────────────────────────────
 
-export function addEvent(input: Omit<FamilyEvent, 'id' | 'familyId'>) {
-  const event: FamilyEvent = { ...input, id: newId(), familyId }
+export function addEvent(input: Omit<FamilyEvent, 'id' | 'familyId' | 'seriesId'>) {
+  const event: FamilyEvent = { ...input, id: newId(), familyId, seriesId: null }
   write({ ...state, events: [...state.events, event] }, () =>
     supabase.from('event').insert(fromEvent(event)),
   )
   return event
+}
+
+/**
+ * 반복 일정: 같은 내용을 여러 날짜에 한 번에 만듭니다. 전부 같은 seriesId 를 가져서
+ * '이 반복 전체 지우기' 가 됩니다. 규칙은 저장하지 않습니다 — 날짜마다 실제 줄입니다.
+ */
+export function addEventSeries(
+  base: Omit<FamilyEvent, 'id' | 'familyId' | 'seriesId' | 'startsAt' | 'endsAt'>,
+  occurrences: { startsAt: string; endsAt: string }[],
+) {
+  if (occurrences.length === 0) return []
+  const seriesId = newId()
+  const events: FamilyEvent[] = occurrences.map((o) => ({
+    ...base,
+    ...o,
+    id: newId(),
+    familyId,
+    seriesId,
+  }))
+  write({ ...state, events: [...state.events, ...events] }, async () => {
+    const res = await supabase.from('event').insert(events.map(fromEvent))
+    // series_id 컬럼이 아직 없는 서버(schema.sql 재실행 전)면 묶음 없이라도 저장합니다.
+    if (res.error && (res.error as { code?: string }).code === '42703') {
+      return supabase
+        .from('event')
+        .insert(events.map((e) => fromEvent({ ...e, seriesId: undefined })))
+    }
+    return res
+  })
+  return events
+}
+
+/** 반복으로 만든 일정을 한 번에 지웁니다. 댓글은 cascade 로 함께 사라집니다. */
+export function removeEventSeries(seriesId: string) {
+  const ids = new Set(state.events.filter((e) => e.seriesId === seriesId).map((e) => e.id))
+  write(
+    {
+      ...state,
+      events: state.events.filter((e) => !ids.has(e.id)),
+      comments: state.comments.filter((c) => !c.eventId || !ids.has(c.eventId)),
+    },
+    () => supabase.from('event').delete().eq('series_id', seriesId),
+  )
 }
 
 export function updateEvent(id: string, changes: Partial<FamilyEvent>) {

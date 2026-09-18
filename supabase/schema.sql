@@ -43,6 +43,12 @@ create table if not exists event (
   memo      text not null default ''
 );
 
+-- 반복 일정 묶음. '매주 월수금 피아노' 처럼 한 번에 만든 일정들이 같은 값을 가집니다.
+-- 반복 규칙을 따로 저장하지 않고 날짜마다 실제 줄을 만듭니다 — 하루만 고치거나 지우기 쉽고,
+-- 달력 코드가 규칙을 해석할 필요가 없습니다. 나중에 추가된 컬럼이라 alter 로 붙입니다.
+alter table event add column if not exists series_id uuid;
+create index if not exists event_series_idx on event (series_id) where series_id is not null;
+
 -- 할일과 숙제는 한 테이블입니다. kind 로만 구분합니다.
 -- 쪼개면 '오늘 할 거 전부 보기'가 불필요하게 복잡해집니다.
 create table if not exists task (

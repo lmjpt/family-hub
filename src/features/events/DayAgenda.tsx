@@ -1,19 +1,14 @@
 import EmptyState from '../../components/EmptyState'
 import { useDb } from '../../lib/db'
 import { dayKey, formatDayLabel, formatShort, formatTime } from '../../lib/date'
-import type { DayKey } from '../../lib/date'
 import CommentButton from '../comments/CommentButton'
 import type { FamilyEvent, Task } from '../../types'
 
 interface Props {
-  day: DayKey
-  isToday: boolean
   /** 이 날에 걸친 일정 (시작 순) */
   events: FamilyEvent[]
   /** 이 날 마감인 할일·숙제 (확인 안 된 것만) */
   tasks: Task[]
-  /** 있으면 '+ 일정' 버튼이 보입니다 */
-  onAdd?: () => void
   onOpenEvent: (event: FamilyEvent) => void
 }
 
@@ -32,27 +27,15 @@ function eventWhen(e: FamilyEvent): string {
 
 /**
  * 고른 날 하루의 일정과 마감 목록. 일정 탭 맨 위에 놓여 "오늘 뭐 있지" 에 바로 답합니다.
- * 데이터 고르기(어느 날의 무엇)는 Calendar 가 하고, 여기서는 그리기만 합니다.
+ * 데이터 고르기(어느 날의 무엇)와 제목·버튼은 Calendar 가 하고, 여기서는 목록만 그립니다.
  */
-export default function DayAgenda({ day, isToday, events, tasks, onAdd, onOpenEvent }: Props) {
+export default function DayAgenda({ events, tasks, onOpenEvent }: Props) {
   const db = useDb()
   const member = (id: string | null) => db.members.find((m) => m.id === id) ?? null
   const color = (id: string | null) => member(id)?.color ?? '#b9ada0'
 
   return (
-    <section className="space-y-2">
-      <div className="flex items-center justify-between">
-        <h3 className="text-base font-bold">
-          {isToday ? '오늘 · ' : ''}
-          {formatDayLabel(day)}
-        </h3>
-        {onAdd && (
-          <button type="button" onClick={onAdd} className="btn btn-primary py-2">
-            + 일정
-          </button>
-        )}
-      </div>
-
+    <>
       {events.length === 0 && tasks.length === 0 ? (
         <div className="card">
           <EmptyState emoji="🗓️" title="이 날은 비어 있어요" />
@@ -106,6 +89,6 @@ export default function DayAgenda({ day, isToday, events, tasks, onAdd, onOpenEv
           })}
         </ul>
       )}
-    </section>
+    </>
   )
 }

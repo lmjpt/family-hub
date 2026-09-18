@@ -43,6 +43,8 @@ export interface FamilyEvent {
   /** null 이면 가족 전체 일정 */
   ownerId: string | null
   memo: string
+  /** 반복으로 한 번에 만든 일정들의 묶음 id. 단발 일정은 null */
+  seriesId: string | null
 }
 
 export interface Task {

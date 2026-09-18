@@ -1,10 +1,19 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import DateTimeField from '../../components/DateTimeField'
 import Modal from '../../components/Modal'
-import { addEvent, removeEvent, updateEvent, useDb } from '../../lib/db'
+import {
+  addEvent,
+  addEventSeries,
+  removeEvent,
+  removeEventSeries,
+  updateEvent,
+  useDb,
+} from '../../lib/db'
 import { dayKeyToIso, isoToSeoulInput, seoulInputToIso } from '../../lib/date'
 import { canCreateFamilyEvent, canEditEvent } from '../../lib/permissions'
 import { useMe } from '../auth'
+import RepeatPicker, { buildOccurrences, defaultRepeat } from './RepeatPicker'
+import type { Repeat } from './RepeatPicker'
 import type { FamilyEvent } from '../../types'
 
 interface Props {
@@ -26,6 +35,7 @@ export default function EventForm({ open, event, defaultDay, onClose }: Props) {
   const [end, setEnd] = useState('')
   const [ownerId, setOwnerId] = useState<string>('')
   const [memo, setMemo] = useState('')
+  const [repeat, setRepeat] = useState<Repeat>(() => defaultRepeat(defaultDay))
 
   // 모달이 열릴 때마다 폼을 대상에 맞게 다시 채웁니다.
   useEffect(() => {
@@ -45,37 +55,56 @@ export default function EventForm({ open, event, defaultDay, onClose }: Props) {
       // 아이가 만들면 자동으로 자기 일정. 부모는 기본이 '가족 전체'.
       setOwnerId(me?.role === 'child' ? me.id : '')
       setMemo('')
+      setRepeat(defaultRepeat(defaultDay))
     }
   }, [open, event, defaultDay, me])
+
+  // 시작 날짜를 바꾸면 그 요일이 선택돼 있게 맞춰 줍니다 (반복을 아직 안 켰을 때만).
+  const startKey = start.slice(0, 10)
+  useEffect(() => {
+    if (!event && !repeat.enabled && startKey.length === 10) {
+      setRepeat((r) => ({ ...r, weekdays: defaultRepeat(startKey).weekdays }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startKey])
+
+  const repeating = !event && repeat.enabled
+  const occurrences = useMemo(
+    () => (repeating && start && end ? buildOccurrences(start, end < start ? start : end, repeat) : []),
+    [repeating, start, end, repeat],
+  )
 
   if (!me) return null
 
   const canPickFamily = canCreateFamilyEvent(me)
   const editable = event ? canEditEvent(me, event) : true
-  const valid = title.trim().length > 0 && start !== '' && end !== ''
+  const valid =
+    title.trim().length > 0 && start !== '' && end !== '' && (!repeating || occurrences.length > 0)
 
   function save() {
     if (!valid || !me) return
     // 끝 시간을 시작보다 앞으로 넣어도 앱이 이상해지지 않게 바로잡습니다.
     const startsAt = seoulInputToIso(start)
     const endsAt = seoulInputToIso(end < start ? start : end)
-    const payload = {
-      title: title.trim(),
-      startsAt,
-      endsAt,
-      allDay,
-      ownerId: ownerId || null,
-      memo: memo.trim(),
-    }
-    if (event) updateEvent(event.id, payload)
-    else addEvent(payload)
+    const base = { title: title.trim(), allDay, ownerId: ownerId || null, memo: memo.trim() }
+    if (event) updateEvent(event.id, { ...base, startsAt, endsAt })
+    else if (repeating) addEventSeries(base, occurrences)
+    else addEvent({ ...base, startsAt, endsAt })
     onClose()
   }
 
   function handleDelete() {
     if (!event) return
-    if (!window.confirm(`'${event.title}' 일정을 지울까요?`)) return
+    if (!window.confirm(`'${event.title}' 일정을 지울까요? (이 날만)`)) return
     removeEvent(event.id)
+    onClose()
+  }
+
+  function handleDeleteSeries() {
+    if (!event?.seriesId) return
+    const count = db.events.filter((e) => e.seriesId === event.seriesId).length
+    if (!window.confirm(`'${event.title}' 반복 일정 ${count}개를 모두 지울까요?`)) return
+    removeEventSeries(event.seriesId)
     onClose()
   }
 
@@ -88,7 +117,12 @@ export default function EventForm({ open, event, defaultDay, onClose }: Props) {
         <>
           {event && editable && (
             <button type="button" onClick={handleDelete} className="btn btn-ghost">
-              삭제
+              {event.seriesId ? '이 날만 삭제' : '삭제'}
+            </button>
+          )}
+          {event?.seriesId && editable && (
+            <button type="button" onClick={handleDeleteSeries} className="btn btn-ghost text-muted">
+              반복 전체 삭제
             </button>
           )}
           <button
@@ -97,7 +131,7 @@ export default function EventForm({ open, event, defaultDay, onClose }: Props) {
             disabled={!valid || !editable}
             className="btn btn-primary flex-1"
           >
-            저장
+            {repeating ? `일정 ${occurrences.length}개 저장` : '저장'}
           </button>
         </>
       }
@@ -141,6 +175,14 @@ export default function EventForm({ open, event, defaultDay, onClose }: Props) {
             <DateTimeField id="event-end" value={end} onChange={setEnd} />
           </div>
         </div>
+
+        {/* 반복은 새로 만들 때만. 이미 있는 반복 일정은 하루씩 고칩니다. */}
+        {!event && <RepeatPicker repeat={repeat} onChange={setRepeat} count={occurrences.length} />}
+        {event?.seriesId && (
+          <p className="rounded-xl bg-cream px-4 py-3 text-sm text-muted">
+            반복으로 만든 일정이에요. 여기서 고치면 <b>이 날만</b> 바뀝니다.
+          </p>
+        )}
 
         <div>
           <label className="label" htmlFor="event-owner">

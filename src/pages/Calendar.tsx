@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react'
 import DayAgenda from '../features/events/DayAgenda'
 import EventForm from '../features/events/EventForm'
+import FamilyBoard from '../features/events/FamilyBoard'
 import { useMe } from '../features/auth'
 import { useDb } from '../lib/db'
 import {
   WEEKDAYS,
   addDays,
   dayKey,
+  formatDayLabel,
   formatMonthLabel,
   formatTime,
   monthGrid,
@@ -15,6 +17,8 @@ import {
 } from '../lib/date'
 import { canCreateEvent } from '../lib/permissions'
 import type { FamilyEvent } from '../types'
+
+const VIEW_KEY = 'family-hub-calendar-view'
 
 /**
  * 일정이 걸쳐 있는 날짜 키들 (시작일 ~ 끝나는 날, 포함).
@@ -85,9 +89,18 @@ export default function Calendar() {
     id === null ? '#b9ada0' : (db.members.find((m) => m.id === id)?.color ?? '#b9ada0')
 
   const selectedEvents = eventsByDay.get(selected) ?? []
-  const selectedTasks = db.tasks.filter(
-    (t) => t.dueAt && dayKey(t.dueAt) === selected && t.status !== 'confirmed',
+  // 목록에는 아직 안 끝난 것만, 가족별 표에는 끝난 것도 (다 했는지가 보여야 하니까)
+  const selectedTasksAll = db.tasks.filter((t) => t.dueAt && dayKey(t.dueAt) === selected)
+  const selectedTasks = selectedTasksAll.filter((t) => t.status !== 'confirmed')
+
+  // 보기 방식은 기기에 기억합니다. 부모는 가족별, 아이는 목록을 주로 쓸 겁니다.
+  const [view, setView] = useState<'list' | 'board'>(() =>
+    localStorage.getItem(VIEW_KEY) === 'board' ? 'board' : 'list',
   )
+  function changeView(next: 'list' | 'board') {
+    setView(next)
+    localStorage.setItem(VIEW_KEY, next)
+  }
   const monthPrefix = `${cursor.year}-${String(cursor.month).padStart(2, '0')}`
 
   function openNew() {
@@ -108,14 +121,43 @@ export default function Calendar() {
   return (
     <div className="space-y-4">
       {/* 고른 날의 일정·마감. 앱을 열면 오늘 것이 바로 보여야 해서 달력보다 위에 둡니다. */}
-      <DayAgenda
-        day={selected}
-        isToday={selected === today}
-        events={selectedEvents}
-        tasks={selectedTasks}
-        onAdd={canCreateEvent(me) ? openNew : undefined}
-        onOpenEvent={openEdit}
-      />
+      <section className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="min-w-0 truncate text-base font-bold">
+            {selected === today ? '오늘 · ' : ''}
+            {formatDayLabel(selected)}
+          </h3>
+          <div className="flex shrink-0 items-center gap-2">
+            {/* 목록 = 시간순 한 줄씩, 가족별 = 사람마다 일정·할일·숙제 한 표 */}
+            <div className="flex rounded-xl border border-line bg-paper p-0.5 text-xs font-semibold">
+              {(['list', 'board'] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => changeView(v)}
+                  aria-pressed={view === v}
+                  className={`rounded-lg px-2.5 py-1.5 ${
+                    view === v ? 'bg-brand-soft text-ink' : 'text-muted'
+                  }`}
+                >
+                  {v === 'list' ? '목록' : '가족별'}
+                </button>
+              ))}
+            </div>
+            {canCreateEvent(me) && (
+              <button type="button" onClick={openNew} className="btn btn-primary py-2">
+                + 일정
+              </button>
+            )}
+          </div>
+        </div>
+
+        {view === 'board' ? (
+          <FamilyBoard events={selectedEvents} tasks={selectedTasksAll} onOpenEvent={openEdit} />
+        ) : (
+          <DayAgenda events={selectedEvents} tasks={selectedTasks} onOpenEvent={openEdit} />
+        )}
+      </section>
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1">
